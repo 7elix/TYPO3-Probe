@@ -1,12 +1,7 @@
-TYPO3-Probe
+TYPO3 Probe v1.0.0
 ===========
 
-Probe script for TYPO3 to upload to remote server.
-
-Status of the project
-------------
-
-<a href="https://travis-ci.org/7elix/TYPO3-Probe" target="_blank"><img src="https://travis-ci.org/7elix/TYPO3-Probe.png?branch=master" style="max-width:100%;"></a>
+Probe is a small and handy script for easy TYPO3 to determine if servers full-fill requirements to run TYPO3 CMS; created and maintained by <a href="https://twitter.com/7elix" target="_blank">Felix Kopp</a>.
 
 How to use
 -----------
@@ -28,3 +23,5 @@ How to contribute
 
 Please report issues with this probe script at Github issues:
 <a href="https://github.com/7elix/TYPO3-Probe/issues" target="_blank">https://github.com/7elix/TYPO3-Probe/issues</a>
+
+<a href="https://travis-ci.org/7elix/TYPO3-Probe" target="_blank"><img src="https://travis-ci.org/7elix/TYPO3-Probe.png?branch=master" style="max-width:100%;"></a>
