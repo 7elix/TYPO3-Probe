@@ -6,7 +6,7 @@ Probe script for TYPO3 to upload to remote server.
 Status of the project
 ------------
 
-<a href="https://travis-ci.org/7elix/TYPO3-Probe.png?branch=master" target="_blank"><img src="https://travis-ci.org/7elix/TYPO3-Probe.png?branch=master" style="max-width:100%;"></a>
+<a href="https://travis-ci.org/7elix/TYPO3-Probe" target="_blank"><img src="https://travis-ci.org/7elix/TYPO3-Probe.png?branch=master" style="max-width:100%;"></a>
 
 How to use
 -----------
