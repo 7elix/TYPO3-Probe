@@ -185,12 +185,6 @@ class Check {
 	);
 
 	/**
-	 * Constructor to load further classes
-	 */
-	public function __construct() {
-	}
-
-	/**
 	 * Get all status information as array with status objects
 	 *
 	 * @return array<\TYPO3\CMS\Install\SystemEnvironment\StatusInterface>
