@@ -7,3 +7,5 @@ php:
 branches:
   only:
     - master
+
+script: phpunit --configuration Tests/phpunit.xml --coverage-text
