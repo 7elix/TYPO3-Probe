@@ -1250,6 +1250,12 @@ function printStatus($statuses) {
 				$mode = 'info';
 				break;
 			}
+			
+			case 'ErrorStatus':
+			{
+				$mode = 'error';
+				break;
+			}
 		}
 
 		$content .= '<div class="' . $mode . '">';
