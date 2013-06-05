@@ -1,7 +1,7 @@
 TYPO3 Probe v1.0.0
 ===========
 
-Probe is a small and handy script to easily determine if servers full-fill requirements to run TYPO3 CMS 6.0+; created and maintained by <a href="https://twitter.com/7elix" target="_blank">Felix Kopp</a>.
+Probe is a small and handy script to easily determine if servers full-fill requirements to run TYPO3 CMS 6.0+; created and maintained by <a href="https://twitter.com/7elix" target="_blank">Felix Kopp</a>. Inspired by <a href="https://github.com/activecollab/activecollab-probe/" target="_blank">activeCollab Probe</a>.
 
 How to use
 -----------
