@@ -172,7 +172,7 @@ class Check {
 		'gd',
 		'hash',
 		'json',
-		'mysql',
+		'mysqli',
 		'openssl',
 		'pcre',
 		'session',
@@ -203,6 +203,7 @@ class Check {
 		$statusArray[] = $this->checkDocRoot();
 		$statusArray[] = $this->checkSqlSafeMode();
 		$statusArray[] = $this->checkOpenBaseDir();
+		$statusArray[] = $this->checkOpenSslInstalled();
 		$statusArray[] = $this->checkSuhosinLoaded();
 		$statusArray[] = $this->checkSuhosinRequestMaxVars();
 		$statusArray[] = $this->checkSuhosinPostMaxVars();
@@ -412,15 +413,24 @@ class Check {
 		$minimumMaximumExecutionTime = 30;
 		$recommendedMaximumExecutionTime = 240;
 		$currentMaximumExecutionTime = ini_get('max_execution_time');
-		if ($currentMaximumExecutionTime == 0 && PHP_SAPI !== 'cli') {
-			$status = new WarningStatus();
-			$status->setTitle('Infinite PHP script execution time');
-			$status->setMessage(
-				'Your max_execution_time is set to 0 (infinite). While TYPO3 is fine' .
-						' with this, you risk a denial-of-service of you system if for whatever' .
-						' reason some script hangs in an infinite loop. You are usually on safe side ' .
-						' if max_execution_time is reduced to ' . $recommendedMaximumExecutionTime
-			);
+		if ($currentMaximumExecutionTime == 0) {
+			if (PHP_SAPI === 'cli') {
+				$status = new OkStatus();
+				$status->setTitle('Infinite PHP script execution time');
+				$status->setMessage(
+					'Maximum PHP script execution time is always set to infinite (0) in cli mode.' .
+							' The setting used for web requests can not be checked from command line.'
+				);
+			} else {
+				$status = new WarningStatus();
+				$status->setTitle('Infinite PHP script execution time');
+				$status->setMessage(
+					'Your max_execution_time is set to 0 (infinite). While TYPO3 is fine' .
+                        ' with this, you risk a denial-of-service of you system if for whatever' .
+                        ' reason some script hangs in an infinite loop. You are usually on safe side ' .
+                        ' if max_execution_time is reduced to ' . $recommendedMaximumExecutionTime
+				);
+			}
 		} elseif ($currentMaximumExecutionTime < $minimumMaximumExecutionTime) {
 			$status = new ErrorStatus();
 			$status->setTitle('Low PHP script execution time');
@@ -453,16 +463,40 @@ class Check {
 	 */
 	protected function checkDisableFunctions() {
 		$disabledFunctions = trim(ini_get('disable_functions'));
-		if (strlen($disabledFunctions) > 0) {
+
+		// Filter "disable_functions"
+		$disabledFunctionsArray = $this->trimExplode(',', $disabledFunctions);
+
+		// Array with strings to find
+		$findStrings = array(
+			// Disabled by default on Ubuntu OS but this is okay since the Core does not use them
+			'pcntl_',
+		);
+		foreach ($disabledFunctionsArray as $key => $disabledFunction) {
+			foreach ($findStrings as $findString) {
+				if (strpos($disabledFunction, $findString) !== FALSE) {
+					unset($disabledFunctionsArray[$key]);
+				}
+			}
+		}
+
+		if (strlen($disabledFunctions) > 0 && count($disabledFunctionsArray) > 0) {
 			$status = new ErrorStatus();
 			$status->setTitle('Some PHP functions disabled');
 			$status->setMessage(
 				'disable_functions=' . implode(' ', explode(',', $disabledFunctions)) . '. These function(s)' .
-						'are disabled. If TYPO3 uses any of these there might be trouble. TYPO3 is designed to use the default' .
-						' set of PHP functions plus some common extensions. Possibly these functions are disabled' .
+						' are disabled. TYPO3 uses some of those, so there might be trouble. TYPO3 is designed to use the' .
+						' default set of PHP functions plus some common extensions. Possibly these functions are disabled' .
 						' due to security considerations and most likely the list would include a function like' .
 						' exec() which is used by TYPO3 at various places. Depending on which exact functions' .
 						' are disabled, some parts of the system may just break without further notice.'
+			);
+		} elseif (strlen($disabledFunctions) > 0 && count($disabledFunctionsArray) === 0) {
+			$status = new NoticeStatus();
+			$status->setTitle('Some PHP functions currently disabled but OK');
+			$status->setMessage(
+				'disable_functions=' . implode(' ', explode(',', $disabledFunctions)) . '. These function(s)' .
+				' are disabled. TYPO3 uses currently none of those, so you are good to go.'
 			);
 		} else {
 			$status = new OkStatus();
@@ -573,6 +607,36 @@ class Check {
 			$status = new OkStatus();
 			$status->setTitle('PHP open_basedir is off');
 		}
+		return $status;
+	}
+
+	/**
+	 * Check accessibility and functionality of OpenSSL
+	 */
+	protected function checkOpenSslInstalled() {
+		if (extension_loaded('openssl')) {
+			$testKey = @openssl_pkey_new();
+			if (is_resource($testKey)) {
+				openssl_free_key($testKey);
+				$status = new OkStatus();
+				$status->setTitle('OpenSSL installed properly');
+			} else {
+				$status = new ErrorStatus();
+				$status->setTitle('OpenSSL extension not working');
+				$status->setMessage(
+					'Something went wrong while trying to create a new private key. ' .
+					'Please check your OpenSSL integration to verify the extension is installed correctly.'
+				);
+			}
+		} else {
+			$status = new ErrorStatus();
+			$status->setTitle('OpenSSL extension not loaded');
+			$status->setMessage(
+				'OpenSSL is an extension to encrypt/decrypt data between requests. ' .
+				'TYPO3 CMS needs it to be able to store passwords encrypted to improve the security on database layer.'
+			);
+		}
+
 		return $status;
 	}
 
@@ -741,8 +805,8 @@ class Check {
 				$status->setMessage(
 					'suhosin.executor.include.whitelist= ' . implode(' ', $currentWhiteListArray) . '. vfs' .
 							' is currently not a hard requirement of TYPO3 CMS but tons of unit tests rely on it.' .
-							' Furthermore, vfs is likely a base for an additional compatibilyt layer in the future.' .
-							' A useful setting is "suhosin.executor.include.whitelist = phar vfs"'
+							' Furthermore, vfs is likely a base for an additional compatibility layer in the future.' .
+							' A useful setting is "suhosin.executor.include.whitelist = phar vfs".'
 				);
 			} else {
 				$status = new OkStatus();
@@ -759,15 +823,20 @@ class Check {
 	}
 
 	/**
-	 * Check apt, xcache or eaccelerator is loaded
+	 * Check if some opcode cache is loaded
 	 *
 	 * @return WarningStatus|OkStatus
 	 */
 	protected function checkSomePhpOpcodeCacheIsLoaded() {
-		$eAcceleratorLoaded = extension_loaded('eaccelerator');
-		$xCacheLoaded = extension_loaded('xcache');
-		$apcLoaded = extension_loaded('apc');
-		if ($eAcceleratorLoaded || $xCacheLoaded || $apcLoaded) {
+		if (
+			// Currently APCu identifies itself both as "apcu" and "apc" (for compatibility) although it doesn't provide the APC-opcache functionality
+			extension_loaded('eaccelerator')
+			|| extension_loaded('xcache')
+			|| (extension_loaded('apc') && !extension_loaded('apcu'))
+			|| extension_loaded('Zend Optimizer+')
+			|| extension_loaded('Zend OPcache')
+			|| extension_loaded('wincache')
+		) {
 			$status = new OkStatus();
 			$status->setTitle('A PHP opcode cache is loaded');
 		} else {
@@ -779,8 +848,8 @@ class Check {
 						' This can be a massive performance improvement and can put load off a' .
 						' server in general, a parse time reduction by factor three for full cached' .
 						' pages can be achieved easily if using some opcode cache.' .
-						' If in doubt choosing one, apc is officially supported by PHP and can be' .
-						' used as data cache layer in TYPO3 CMS as additional feature.'
+						' If in doubt choosing one, APC runs well and can be used as data' .
+						' cache layer in TYPO3 CMS as additional feature.'
 			);
 		}
 		return $status;
@@ -1075,7 +1144,7 @@ class Check {
 	protected function checkGdLibFreeTypeSupport() {
 		if (function_exists('imagettftext')) {
 			$status = new OkStatus();
-			$status->setTitle('PHP GD library has freettype font support');
+			$status->setTitle('PHP GD library has freetype font support');
 			$status->setMessage(
 				'There is a difference between the font size setting the GD' .
 						' library should be feeded with. If installation is completed' .
@@ -1160,7 +1229,7 @@ class Check {
 	 */
 	protected function isWindowsOs() {
 		$windowsOs = FALSE;
-		if (stristr(PHP_OS, 'darwin') && stristr(PHP_OS, 'win')) {
+		if (!stristr(PHP_OS, 'darwin') && stristr(PHP_OS, 'win')) {
 			$windowsOs = TRUE;
 		}
 		return $windowsOs;
