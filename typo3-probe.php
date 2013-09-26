@@ -1270,6 +1270,47 @@ function printStatus($statuses) {
 	return $content;
 }
 
+if (PHP_SAPI === 'cli') {
+    foreach ($statuses as $status) {
+        /** @var StatusInterface $status */
+        switch (get_class($status)) {
+            case 'OkStatus':
+            {
+                $mode = "\033[32m" . "OK";
+                break;
+            }
+
+            case 'WarningStatus':
+            {
+                $mode = "\033[33m" . "WARNING";
+                break;
+            }
+
+            case 'NoticeStatus':
+            {
+                $mode = "\033[36m" . "NOTICE";
+                break;
+            }
+
+            case 'InfoStatus':
+            {
+                $mode = "\033[36m" . "INFO";
+                break;
+            }
+
+            case 'ErrorStatus':
+            {
+                $mode = "\033[31m" . "ERROR";
+                break;
+            }
+        }
+        print $mode . "\t" . $status->getTitle() . "\033[0m\n";
+        if ($status->getMessage())
+            print "\t\t\t" . $status->getMessage() . "\n";
+    }
+    die();
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
