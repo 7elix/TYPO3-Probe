@@ -298,7 +298,7 @@ class Check {
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Maximum file upload size is higher or equal to 10MB');
+			$status->setTitle('Maximum file upload size is higher or equal to 10MB ('.ini_get('upload_max_filesize').'));
 		}
 		return $status;
 	}
@@ -365,7 +365,7 @@ class Check {
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Memory limit equal 64MB or more');
+			$status->setTitle('Memory limit equal 64MB or more ('.ini_get('memory_limit').')');
 		}
 		return $status;
 	}
@@ -398,7 +398,7 @@ class Check {
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('PHP version is fine');
+			$status->setTitle('PHP version is fine ('.$currentPhpVersion.')');
 		}
 		return $status;
 	}
@@ -441,7 +441,7 @@ class Check {
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Maximum PHP script execution equals ' . $recommendedMaximumExecutionTime . ' or more');
+			$status->setTitle('Maximum PHP script execution equals ' . $recommendedMaximumExecutionTime . ' or more ('.$currentMaximumExecutionTime.')');
 		}
 		return $status;
 	}
@@ -1324,7 +1324,7 @@ function printStatus($statuses) {
 		<?= printStatus($statuses); ?>
 
 		<footer>
-			<p><a href="https://github.com/7elix/TYPO3-Probe" target="_blank">TYPO3 Probe</a>. Copyright © 2013 Felix Kopp; based on install check by Christian Kuhn. Extensions are copyright of their respective owners. Go to <a href="http://typo3.org/" target="_blank">http://typo3.org/</a> for details.<br />
+			<p><a href="https://github.com/7elix/TYPO3-Probe" target="_blank">TYPO3 Probe</a>. Copyright &copy; 2013 Felix Kopp; based on install check by Christian Kuhn. Extensions are copyright of their respective owners. Go to <a href="http://typo3.org/" target="_blank">http://typo3.org/</a> for details.<br />
 			TYPO3 CMS and TYPO3 Probe comes with ABSOLUTELY NO WARRANTY; <a href="http://typo3.org/license" target="_blank">click for details</a>. This is free software, and you are welcome to redistribute it under certain conditions; <a href="http://typo3.org/license" target="_blank">click for details</a>. Obstructing the appearance of this notice is prohibited by law.</p>
 
 			<p><a href="http://typo3.org/" target="_blank">TYPO3.org</a> &#124; <a href="http://typo3.org/donate/" target="_blank">Donate</a></p>
