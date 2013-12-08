@@ -1414,7 +1414,13 @@ $statusObjects = $check->getStatus();
 $statusUtility = new StatusUtility();
 $sortedStatusObjects = $statusUtility->sortBySeverity($statusObjects);
 
-function printStatus($sortedStatusObjects) {
+/**
+ * Print sorted StatusObjects for browser
+ *
+ * @param $sortedStatusObjects
+ * @return string
+ */
+function printStatusHtml($sortedStatusObjects) {
 	$content = '';
 	$mode = '';
 
@@ -1439,42 +1445,64 @@ function printStatus($sortedStatusObjects) {
 	return $content;
 }
 
-if (PHP_SAPI === 'cli') {
-	foreach ($statuses as $status) {
-		/** @var StatusInterface $status */
-		switch (get_class($status)) {
-			case 'OkStatus': {
-				$mode = "\033[32m" . "OK";
-				break;
+/**
+ * Print sorted StatusObjects for CLI
+ *
+ * @param array $sortedStatusObjects
+ * @return string
+ */
+function printStatusCli($sortedStatusObjects) {
+	$content = '';
+	$mode = '';
+
+	foreach ($sortedStatusObjects as $severity => $statusObjects) {
+		$content .= "\n" .
+			'*** ' .
+			ucfirst($severity) . ' ' .
+			'(' . count($statusObjects) . ')' .
+			' ***' .
+			"\033[0m\n\n";
+
+		foreach ($statusObjects as $status) {
+			switch ($status->getSeverity()) {
+				case 'ok': {
+					$mode = "\033[32m" . "OK";
+					break;
+				}
+
+				case 'warning': {
+					$mode = "\033[33m" . "WARNING";
+					break;
+				}
+
+				case 'notice': {
+					$mode = "\033[36m" . "NOTICE";
+					break;
+				}
+
+				case 'information': {
+					$mode = "\033[36m" . "INFO";
+					break;
+				}
+
+				case 'error': {
+					$mode = "\033[31m" . "ERROR";
+					break;
+				}
 			}
 
-			case 'WarningStatus': {
-				$mode = "\033[33m" . "WARNING";
-				break;
+			$content .= $mode . $status->getTitle() . "\033[0m\n";
+			if ($status->getMessage()) {
+				$content .= $status->getMessage() . "\n";
 			}
-
-			case 'NoticeStatus': {
-				$mode = "\033[36m" . "NOTICE";
-				break;
-			}
-
-			case 'InfoStatus': {
-				$mode = "\033[36m" . "INFO";
-				break;
-			}
-
-			case 'ErrorStatus':
-			{
-				$mode = "\033[31m" . "ERROR";
-				break;
-			}
-		}
-		print $mode . "\t" . $status->getTitle() . "\033[0m\n";
-
-		if ($status->getMessage()) {
-			print "\t\t\t" . $status->getMessage() . "\n";
 		}
 	}
+
+	return $content;
+}
+
+if (PHP_SAPI === 'cli') {
+	echo printStatusCli($sortedStatusObjects);
 	die();
 }
 
@@ -1583,7 +1611,7 @@ if (PHP_SAPI === 'cli') {
 		<h1>TYPO3 Probe</h1>
 		<p class="well">Checks server for ability to run TYPO3 CMS version 6.2 flawlessly.</p>
 
-		<?= printStatus($sortedStatusObjects); ?>
+		<?= printStatusHtml($sortedStatusObjects); ?>
 
 		<footer>
 			<p><a href="https://github.com/7elix/TYPO3-Probe" target="_blank">TYPO3 Probe</a>. Copyright © 2013 <a href="http://phorax.com/" target="_blank">Felix Kopp</a>; based on install check by Christian Kuhn. Extensions are copyright of their respective owners. Go to <a href="http://typo3.org/" target="_blank">http://typo3.org/</a> for details.</p>
