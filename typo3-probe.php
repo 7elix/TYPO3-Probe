@@ -29,30 +29,7 @@
  * @see http://git.typo3.org/TYPO3v4/Core.git/commit/009f307bd2e1aca577f82044800286529ebaa5e5
  *
  *
- * Check system environment status
- *
- * This class is a hardcoded requirement check of the underlying
- * server and PHP system.
- *
- * The class *must not* check for any TYPO3 specific things like
- * specific configuration values or directories. It should not fail
- * if there is no TYPO3 at all.
- *
- * This class is instantiated as the *very first* class during
- * installation. It is meant to be *standalone* und must not have
- * any requirements, except the status classes. It must be possible
- * to run this script separated from the rest of the core, without
- * dependencies.
- *
- * This means especially:
- * * No hooks or anything like that
- * * No usage of *any* TYPO3 code like GeneralUtility
- * * No require of anything but the status classes
- * * No localization
- *
- * The status messages and title *must not* include HTML, use plain
- * text only. The return values of this class are not bound to HTML
- * and can be used in different scopes (eg. as json array).
+ * Status interface
  *
  * @author Christian Kuhn <lolli@schwarzbu.ch>
  * @see TYPO3 project: typo3/sysext/install/Classes/SystemEnvironment/StatusInterface.php
@@ -60,6 +37,15 @@
 interface StatusInterface {
 
 	/**
+	 * Get severity
+	 *
+	 * @return string The severity
+	 */
+	public function getSeverity();
+
+	/**
+	 * Get title
+	 *
 	 * @return string The title
 	 */
 	public function getTitle();
@@ -90,22 +76,33 @@ interface StatusInterface {
 
 
 /**
- * Class AbstractStatus
+ * Abstract status
  *
  * @author Christian Kuhn <lolli@schwarzbu.ch>
- * @see TYPO3 project: typo3/sysext/install/Classes/SystemEnvironment/AbstractStatus.php
  */
-class AbstractStatus implements StatusInterface {
+abstract class AbstractStatus implements StatusInterface {
+
+	/**
+	 * @var string Severity
+	 */
+	protected $severity = '';
 
 	/**
 	 * @var string Title
 	 */
-	protected $title;
+	protected $title = '';
 
 	/**
 	 * @var string Status message
 	 */
-	protected $message;
+	protected $message = '';
+
+	/**
+	 * @return string The severity
+	 */
+	public function getSeverity() {
+		return $this->severity;
+	}
 
 	/**
 	 * @return string The title
@@ -144,25 +141,109 @@ class AbstractStatus implements StatusInterface {
 	}
 }
 
+/**
+ * Warning level status
+ *
+ * @author Christian Kuhn <lolli@schwarzbu.ch>
+ */
+class WarningStatus extends AbstractStatus implements StatusInterface {
 
-class WarningStatus extends AbstractStatus implements StatusInterface { }
+	/**
+	 * @var string The severity
+	 */
+	protected $severity = 'warning';
 
-class ErrorStatus extends AbstractStatus implements StatusInterface {}
+}
 
-class InfoStatus extends AbstractStatus implements StatusInterface { }
+/**
+ * Error level status
+ *
+ * @author Christian Kuhn <lolli@schwarzbu.ch>
+ */
+class ErrorStatus extends AbstractStatus implements StatusInterface {
 
-class NoticeStatus extends AbstractStatus implements StatusInterface { }
+	/**
+	 * @var string The severity
+	 */
+	protected $severity = 'error';
 
-class OkStatus extends AbstractStatus implements StatusInterface { }
+}
+
+/**
+ * Info level status
+ *
+ * @author Christian Kuhn <lolli@schwarzbu.ch>
+ */
+class InfoStatus extends AbstractStatus implements StatusInterface {
+
+	/**
+	 * @var string The severity
+	 */
+	protected $severity = 'information';
+
+}
+
+/**
+ * Notice level status
+ *
+ * @author Christian Kuhn <lolli@schwarzbu.ch>
+ */
+class NoticeStatus extends AbstractStatus implements StatusInterface {
+
+	/**
+	 * @var string The severity
+	 */
+	protected $severity = 'notice';
+
+}
+
+/**
+ * Ok level status
+ *
+ * @author Christian Kuhn <lolli@schwarzbu.ch>
+ */
+class OkStatus extends AbstractStatus implements StatusInterface {
+
+	/**
+	 * @var string The severity
+	 */
+	protected $severity = 'ok';
+
+}
 
 
 /**
- * Class for system requirement checks
+ * Check system environment status
+ *
+ * This class is a hardcoded requirement check of the underlying
+ * server and PHP system.
+ *
+ * The class *must not* check for any TYPO3 specific things like
+ * specific configuration values or directories. It should not fail
+ * if there is no TYPO3 at all.
+ *
+ * The only core code used is the class loader
+ *
+ * This class is instantiated as the *very first* class during
+ * installation. It is meant to be *standalone* und must not have
+ * any requirements, except the status classes. It must be possible
+ * to run this script separated from the rest of the core, without
+ * dependencies.
+ *
+ * This means especially:
+ * * No hooks or anything like that
+ * * No usage of *any* TYPO3 code like GeneralUtility
+ * * No require of anything but the status classes
+ * * No localization
+ *
+ * The status messages and title *must not* include HTML, use plain
+ * text only. The return values of this class are not bound to HTML
+ * and can be used in different scopes (eg. as json array).
  *
  * @author Christian Kuhn <lolli@schwarzbu.ch>
- * @see TYPO3 project: typo3/sysext/install/Classes/SystemEnvironment/Check.php
  */
 class Check {
+
 	/**
 	 * @var array List of required PHP extensions
 	 */
@@ -172,7 +253,7 @@ class Check {
 		'gd',
 		'hash',
 		'json',
-		'mysql',
+		'mysqli',
 		'openssl',
 		'pcre',
 		'session',
@@ -181,13 +262,13 @@ class Check {
 		'standard',
 		'xml',
 		'zip',
-		'zlib'
+		'zlib',
 	);
 
 	/**
 	 * Get all status information as array with status objects
 	 *
-	 * @return array<\TYPO3\CMS\Install\SystemEnvironment\StatusInterface>
+	 * @return array<StatusInterface>
 	 */
 	public function getStatus() {
 		$statusArray = array();
@@ -201,8 +282,9 @@ class Check {
 		$statusArray[] = $this->checkDisableFunctions();
 		$statusArray[] = $this->checkSafeMode();
 		$statusArray[] = $this->checkDocRoot();
-		$statusArray[] = $this->checkSqlSafeMode();
 		$statusArray[] = $this->checkOpenBaseDir();
+		$statusArray[] = $this->checkXdebugMaxNestingLevel();
+		$statusArray[] = $this->checkOpenSslInstalled();
 		$statusArray[] = $this->checkSuhosinLoaded();
 		$statusArray[] = $this->checkSuhosinRequestMaxVars();
 		$statusArray[] = $this->checkSuhosinPostMaxVars();
@@ -215,7 +297,6 @@ class Check {
 		foreach ($this->requiredPhpExtensions as $extension) {
 			$statusArray[] = $this->checkRequiredPhpExtension($extension);
 		}
-		$statusArray[] = $this->checkMailCapabilities();
 		$statusArray[] = $this->checkGdLibTrueColorSupport();
 		$statusArray[] = $this->checkGdLibGifSupport();
 		$statusArray[] = $this->checkGdLibJpgSupport();
@@ -223,13 +304,14 @@ class Check {
 		$statusArray[] = $this->checkGdLibFreeTypeSupport();
 		$statusArray[] = $this->checkPhpMagicQuotes();
 		$statusArray[] = $this->checkRegisterGlobals();
+		$statusArray[] = $this->isTrueTypeFontDpiStandard();
 		return $statusArray;
 	}
 
 	/**
 	 * Checks if current directory (.) is in PHP include path
 	 *
-	 * @return WarningStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkCurrentDirectoryIsInIncludePath() {
 		$includePath = ini_get('include_path');
@@ -237,17 +319,17 @@ class Check {
 		$pathArray = $this->trimExplode($delimiter, $includePath);
 		if (!in_array('.', $pathArray)) {
 			$status = new WarningStatus();
-			$status->setTitle('Current directory (./) is not in include path');
+			$status->setTitle('Current directory (./) is not within PHP include path');
 			$status->setMessage(
-				'include_path = ' . implode(' ', $pathArray) .
-						' Normally the current path, \'.\', is included in the' .
-						' include_path of PHP. Although TYPO3 does not rely on this,' .
-						' it is an unusual setting that may introduce problems for' .
-						' some extensions.'
+				'include_path = ' . implode(' ', $pathArray) . LF .
+				'Normally the current path \'.\' is included in the' .
+				' include_path of PHP. Although TYPO3 does not rely on this,' .
+				' it is an unusual setting that may introduce problems for' .
+				' some extensions.'
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Current directory (./) is in include path.');
+			$status->setTitle('Current directory (./) is within PHP include path.');
 		}
 		return $status;
 	}
@@ -255,25 +337,25 @@ class Check {
 	/**
 	 * Check if file uploads are enabled in PHP
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkFileUploadEnabled() {
 		if (!ini_get('file_uploads')) {
 			$status = new ErrorStatus();
-			$status->setTitle('File uploads not allowed');
+			$status->setTitle('File uploads not allowed in PHP');
 			$status->setMessage(
-				'file_uploads=' . ini_get('file_uploads') .
-						' TYPO3 uses the ability to upload files from the browser in various cases.' .
-						' As long as this flag is disabled, you\'ll not be able to upload files.' .
-						' But it doesn\'t end here, because not only are files not accepted by' .
-						' the server - ALL content in the forms are discarded and therefore' .
-						' nothing at all will be editable if you don\'t set this flag!' .
-						' However if you cannot enable fileupload for some reason alternatively' .
-						' you change the default form encoding value with \\$TYPO3_CONF_VARS[SYS][form_enctype].'
+				'file_uploads=' . ini_get('file_uploads') . LF .
+				'TYPO3 uses the ability to upload files from the browser in various cases.' .
+				' As long as this flag is disabled in PHP, you\'ll not be able to upload files.' .
+				' But it doesn\'t end here, because not only are files not accepted by' .
+				' the server - ALL content in the forms are discarded and therefore' .
+				' nothing at all will be editable if you don\'t set this flag!' .
+				' However if you cannot enable fileupload for some reason in PHP, alternatively' .
+				' change the default form encoding value with \\$TYPO3_CONF_VARS[SYS][form_enctype].'
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('File uploads allowed');
+			$status->setTitle('File uploads allowed in PHP');
 		}
 		return $status;
 	}
@@ -281,24 +363,26 @@ class Check {
 	/**
 	 * Check maximum file upload size against default value of 10MB
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkMaximumFileUploadSize() {
 		$maximumUploadFilesize = $this->getBytesFromSizeMeasurement(ini_get('upload_max_filesize'));
 		if ($maximumUploadFilesize < 1024 * 1024 * 10) {
 			$status = new ErrorStatus();
-			$status->setTitle('Maximum upload filesize too small');
+			$status->setTitle('PHP Maximum upload filesize too small');
 			$status->setMessage(
-				'upload_max_filesize=' . ini_get('upload_max_filesize') .
-						' By default TYPO3 supports uploading, copying and moving' .
-						' files of sizes up to 10MB (You can alter the TYPO3 defaults' .
-						' by the config option TYPO3_CONF_VARS[BE][maxFileSize]).' .
-						' Your current value is below this, so at this point, PHP sets' .
-						' the limits for uploaded filesizes and not TYPO3.'
+				'upload_max_filesize=' . ini_get('upload_max_filesize') . LF .
+				'By default TYPO3 supports uploading, copying and moving' .
+				' files of sizes up to 10MB (you can alter the TYPO3 defaults' .
+				' by the config option TYPO3_CONF_VARS[BE][maxFileSize]).' .
+				' Your current PHP value is below this, so at this point, PHP determines' .
+				' the limits for uploaded filesizes and not TYPO3.' .
+				' It is recommended that the value of upload_max_filesize at least equals to the value' .
+				' of TYPO3_CONF_VARS[BE][maxFileSize]'
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Maximum file upload size is higher or equal to 10MB');
+			$status->setTitle('PHP Maximum file upload size is higher or equal to 10MB');
 		}
 		return $status;
 	}
@@ -306,24 +390,24 @@ class Check {
 	/**
 	 * Check maximum post upload size correlates with maximum file upload
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkPostUploadSizeIsHigherOrEqualMaximumFileUploadSize() {
 		$maximumUploadFilesize = $this->getBytesFromSizeMeasurement(ini_get('upload_max_filesize'));
 		$maximumPostSize = $this->getBytesFromSizeMeasurement(ini_get('post_max_size'));
 		if ($maximumPostSize < $maximumUploadFilesize) {
 			$status = new ErrorStatus();
-			$status->setTitle('Maximum size for POST requests is smaller than max. upload filesize');
+			$status->setTitle('Maximum size for POST requests is smaller than maximum upload filesize in PHP');
 			$status->setMessage(
-				'upload_max_filesize=' . ini_get('upload_max_filesize') .
-						', post_max_size=' . ini_get('post_max_size') .
-						' You have defined a maximum size for file uploads which' .
-						' exceeds the allowed size for POST requests. Therefore the' .
-						' file uploads can not be larger than ' . ini_get('post_max_size')
+				'upload_max_filesize=' . ini_get('upload_max_filesize') . LF .
+				'post_max_size=' . ini_get('post_max_size') . LF .
+				'You have defined a maximum size for file uploads in PHP which' .
+				' exceeds the allowed size for POST requests. Therefore the' .
+				' file uploads can not be larger than ' . ini_get('post_max_size') . '.'
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Maximum post upload size correlates with maximum upload file size');
+			$status->setTitle('Maximum post upload size correlates with maximum upload file size in PHP');
 		}
 		return $status;
 	}
@@ -331,41 +415,46 @@ class Check {
 	/**
 	 * Check memory settings
 	 *
-	 * @return ErrorStatus|WarningStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkMemorySettings() {
+		$minimumMemoryLimit = 32;
+		$recommendedMemoryLimit = 64;
 		$memoryLimit = $this->getBytesFromSizeMeasurement(ini_get('memory_limit'));
 		if ($memoryLimit <= 0) {
 			$status = new WarningStatus();
-			$status->setTitle('Unlimited memory limit!');
+			$status->setTitle('Unlimited memory limit for PHP');
 			$status->setMessage(
-				'Your webserver is configured to not limit PHP memory usage at all. This is a risk' .
-						' and should be avoided in production setup. In general it\'s best practice to limit this' .
-						' in the configuration of your webserver. To be safe, ask the system administrator of the' .
-						' webserver to raise the limit to something over 64MB'
+				'PHP is configured to not limit memory usage at all. This is a risk' .
+				' and should be avoided in production setup. In general it\'s best practice to limit this.' .
+				' To be safe, set a limit in PHP, but with a minimum of ' . $recommendedMemoryLimit . 'MB:' . LF .
+				'memory_limit=' . $recommendedMemoryLimit . 'M'
 			);
-		} elseif ($memoryLimit < 1024 * 1024 * 32) {
+		} elseif ($memoryLimit < 1024 * 1024 * $minimumMemoryLimit) {
 			$status = new ErrorStatus();
-			$status->setTitle('Memory limit below 32MB');
+			$status->setTitle('PHP Memory limit below ' . $minimumMemoryLimit . 'MB');
 			$status->setMessage(
-				'memory_limit=' . ini_get('memory_limit') .
-						' Your system is configured to enforce a memory limit of PHP scripts lower than 32MB.' .
-						' There is nothing else to do than raise the limit. To be safe, ask the system' .
-						' administrator of the webserver to raise the limit to 64MB.'
+				'memory_limit=' . ini_get('memory_limit') . LF .
+				'Your system is configured to enforce a memory limit of PHP scripts lower than ' .
+				$minimumMemoryLimit . 'MB. It is required to raise the limit.' .
+				' We recommend a minimum PHP memory limit of ' . $recommendedMemoryLimit . 'MB:' . LF .
+				'memory_limit=' . $recommendedMemoryLimit . 'M'
 			);
-		} elseif ($memoryLimit < 1024 * 1024 * 64) {
+		} elseif ($memoryLimit < 1024 * 1024 * $recommendedMemoryLimit) {
 			$status = new WarningStatus();
-			$status->setTitle('Memory limit below 64MB');
+			$status->setTitle('PHP Memory limit below ' . $recommendedMemoryLimit . 'MB');
 			$status->setMessage(
-				'memory_limit=' . ini_get('memory_limit') .
-						' Your system is configured to enforce a memory limit of PHP scripts lower than 64MB.' .
-						' A slim TYPO3 instance without many extensions will probably work, but you should ' .
-						' monitor your system for exhausted messages, especially if using the backend. ' .
-						' To be on the safe side, it would be better to raise the PHP memory limit to 64MB or more.'
+				'memory_limit=' . ini_get('memory_limit') . LF .
+				'Your system is configured to enforce a memory limit of PHP scripts lower than ' .
+				$recommendedMemoryLimit . 'MB.' .
+				' A slim TYPO3 instance without many extensions will probably work, but you should monitor your' .
+				' system for exhausted messages, especially if using the backend. To be on the safe side,' .
+				' we recommend a minimum PHP memory limit of ' . $recommendedMemoryLimit . 'MB:' . LF .
+				'memory_limit=' . $recommendedMemoryLimit . 'M'
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Memory limit equal 64MB or more');
+			$status->setTitle('PHP Memory limit equals to ' . $recommendedMemoryLimit . 'MB or more');
 		}
 		return $status;
 	}
@@ -373,28 +462,17 @@ class Check {
 	/**
 	 * Check minimum PHP version
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkPhpVersion() {
-		$minimumPhpVersion = '5.3.0';
-		$recommendedPhpVersion = '5.3.7';
+		$minimumPhpVersion = '5.3.7';
 		$currentPhpVersion = phpversion();
 		if (version_compare($currentPhpVersion, $minimumPhpVersion) < 0) {
 			$status = new ErrorStatus();
 			$status->setTitle('PHP version too low');
 			$status->setMessage(
 				'Your PHP version ' . $currentPhpVersion . ' is too old. TYPO3 CMS does not run' .
-						' with this version. Update to at least PHP ' . $recommendedPhpVersion
-			);
-		} elseif (version_compare($currentPhpVersion, $recommendedPhpVersion) < 0) {
-			$status = new WarningStatus();
-			$status->setTitle('PHP version below recommended version');
-			$status->setMessage(
-				'Your PHP version ' . $currentPhpVersion . ' is below the recommended version' .
-						' ' . $recommendedPhpVersion . '. TYPO3 CMS will mostly run with your PHP' .
-						' version, but it is not officially supported. Expect some problems,' .
-						' and a performance penalty, monitor your system for errors and watch' .
-						' out for an upgrade, soon.'
+				' with this version. Update to at least PHP ' . $minimumPhpVersion
 			);
 		} else {
 			$status = new OkStatus();
@@ -406,42 +484,55 @@ class Check {
 	/**
 	 * Check maximum execution time
 	 *
-	 * @return ErrorStatus|WarningStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkMaxExecutionTime() {
 		$minimumMaximumExecutionTime = 30;
 		$recommendedMaximumExecutionTime = 240;
 		$currentMaximumExecutionTime = ini_get('max_execution_time');
-		if ($currentMaximumExecutionTime == 0 && PHP_SAPI !== 'cli') {
-			$status = new WarningStatus();
-			$status->setTitle('Infinite PHP script execution time');
-			$status->setMessage(
-				'Your max_execution_time is set to 0 (infinite). While TYPO3 is fine' .
-						' with this, you risk a denial-of-service of you system if for whatever' .
-						' reason some script hangs in an infinite loop. You are usually on safe side ' .
-						' if max_execution_time is reduced to ' . $recommendedMaximumExecutionTime
-			);
+		if ($currentMaximumExecutionTime == 0) {
+			if (PHP_SAPI === 'cli') {
+				$status = new OkStatus();
+				$status->setTitle('Infinite PHP script execution time');
+				$status->setMessage(
+					'Maximum PHP script execution time is always set to infinite (0) in cli mode.' .
+					' The setting used for web requests can not be checked from command line.'
+				);
+			} else {
+				$status = new WarningStatus();
+				$status->setTitle('Infinite PHP script execution time');
+				$status->setMessage(
+					'max_execution_time=' . $currentMaximumExecutionTime . LF .
+					'While TYPO3 is fine with this, you risk a denial-of-service of your system if for whatever' .
+					' reason some script hangs in an infinite loop. You are usually on safe side ' .
+					' if it is reduced to ' . $recommendedMaximumExecutionTime . ' seconds:' . LF .
+					'max_execution_time=' . $recommendedMaximumExecutionTime
+				);
+			}
 		} elseif ($currentMaximumExecutionTime < $minimumMaximumExecutionTime) {
 			$status = new ErrorStatus();
 			$status->setTitle('Low PHP script execution time');
 			$status->setMessage(
-				'Your max_execution_time is set to ' . $currentMaximumExecutionTime .
-						'. Some expensive operation in TYPO3 can take longer than that. It is advised' .
-						' to raise max_execution_time to ' . $recommendedMaximumExecutionTime
+				'max_execution_time=' . $currentMaximumExecutionTime . LF .
+				'Your max_execution_time is too low. Some expensive operation in TYPO3 can take longer than that.' .
+				' It is recommended to raise the limit to ' . $recommendedMaximumExecutionTime . ' seconds:' . LF .
+				'max_execution_time=' . $recommendedMaximumExecutionTime
 			);
 		} elseif ($currentMaximumExecutionTime < $recommendedMaximumExecutionTime) {
 			$status = new WarningStatus();
 			$status->setTitle('Low PHP script execution time');
 			$status->setMessage(
-				'Your max_execution_time is set to ' . $currentMaximumExecutionTime .
-						'. While TYPO3 often runs without problems with ' . $minimumMaximumExecutionTime .
-						' it still may happen that script execution is stopped before finishing' .
-						' calculations. You should monitor the system for messages in this area' .
-						' and maybe raise the limit to ' . $recommendedMaximumExecutionTime . '.'
+				'max_execution_time=' . $currentMaximumExecutionTime . LF .
+				'Your max_execution_time is low. While TYPO3 often runs without problems' .
+				' with ' . $minimumMaximumExecutionTime . ' seconds,' .
+				' it still may happen that script execution is stopped before finishing' .
+				' calculations. You should monitor the system for messages in this area' .
+				' and maybe raise the limit to ' . $recommendedMaximumExecutionTime . ' seconds:' . LF .
+				'max_execution_time=' . $recommendedMaximumExecutionTime
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Maximum PHP script execution equals ' . $recommendedMaximumExecutionTime . ' or more');
+			$status->setTitle('Maximum PHP script execution time equals ' . $recommendedMaximumExecutionTime . ' or more');
 		}
 		return $status;
 	}
@@ -449,23 +540,48 @@ class Check {
 	/**
 	 * Check for disabled functions
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkDisableFunctions() {
 		$disabledFunctions = trim(ini_get('disable_functions'));
-		if (strlen($disabledFunctions) > 0) {
+
+		// Filter "disable_functions"
+		$disabledFunctionsArray = $this->trimExplode(',', $disabledFunctions);
+
+		// Array with strings to find
+		$findStrings = array(
+			// Disabled by default on Ubuntu OS but this is okay since the Core does not use them
+			'pcntl_',
+		);
+		foreach ($disabledFunctionsArray as $key => $disabledFunction) {
+			foreach ($findStrings as $findString) {
+				if (strpos($disabledFunction, $findString) !== FALSE) {
+					unset($disabledFunctionsArray[$key]);
+				}
+			}
+		}
+
+		if (strlen($disabledFunctions) > 0 && count($disabledFunctionsArray) > 0) {
 			$status = new ErrorStatus();
 			$status->setTitle('Some PHP functions disabled');
 			$status->setMessage(
-				'disable_functions=' . implode(' ', explode(',', $disabledFunctions)) . '. These function(s)' .
-						'are disabled. If TYPO3 uses any of these there might be trouble. TYPO3 is designed to use the default' .
-						' set of PHP functions plus some common extensions. Possibly these functions are disabled' .
-						' due to security considerations and most likely the list would include a function like' .
-						' exec() which is used by TYPO3 at various places. Depending on which exact functions' .
-						' are disabled, some parts of the system may just break without further notice.'
+				'disable_functions=' . implode(' ', explode(',', $disabledFunctions)) . LF .
+				'These function(s) are disabled. TYPO3 uses some of those, so there might be trouble.' .
+				' TYPO3 is designed to use the default set of PHP functions plus some common extensions.' .
+				' Possibly these functions are disabled' .
+				' due to security considerations and most likely the list would include a function like' .
+				' exec() which is used by TYPO3 at various places. Depending on which exact functions' .
+				' are disabled, some parts of the system may just break without further notice.'
+			);
+		} elseif (strlen($disabledFunctions) > 0 && count($disabledFunctionsArray) === 0) {
+			$status = new NoticeStatus();
+			$status->setTitle('Some PHP functions currently disabled but OK');
+			$status->setMessage(
+				'disable_functions=' . implode(' ', explode(',', $disabledFunctions)) . LF .
+				'These function(s) are disabled. TYPO3 uses currently none of those, so you are good to go.'
 			);
 		} else {
-			$status = new OkStatus();
+			$status  = new OkStatus();
 			$status->setTitle('No disabled PHP functions');
 		}
 		return $status;
@@ -474,7 +590,7 @@ class Check {
 	/**
 	 * Check if safe mode is enabled
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkSafeMode() {
 		$safeModeEnabled = FALSE;
@@ -489,7 +605,8 @@ class Check {
 			$status = new ErrorStatus();
 			$status->setTitle('PHP safe mode on');
 			$status->setMessage(
-				'safe_mode enabled. This is unsupported by TYPO3 CMS, it must be turned off.'
+				'PHP safe_mode enabled. This is unsupported by TYPO3 CMS, it must be turned off:' . LF .
+				'safe_mode=Off'
 			);
 		} else {
 			$status = new OkStatus();
@@ -501,7 +618,7 @@ class Check {
 	/**
 	 * Check for doc_root ini setting
 	 *
-	 * @return NoticeStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkDocRoot() {
 		$docRootSetting = trim(ini_get('doc_root'));
@@ -509,11 +626,12 @@ class Check {
 			$status = new NoticeStatus();
 			$status->setTitle('doc_root is set');
 			$status->setMessage(
-				'doc_root=' . $docRootSetting . ' PHP cannot execute scripts' .
-						' outside this directory. This setting is used seldom and must correlate' .
-						' with your actual document root. You might be in trouble if your' .
-						' TYPO3 CMS core code is linked to some different location.' .
-						' If that is a problem, the setting must be adapted.'
+				'doc_root=' . $docRootSetting . LF .
+				'PHP cannot execute scripts' .
+				' outside this directory. This setting is used seldom and must correlate' .
+				' with your actual document root. You might be in trouble if your' .
+				' TYPO3 CMS core code is linked to some different location.' .
+				' If that is a problem, the setting must be adapted.'
 			);
 		} else {
 			$status = new OkStatus();
@@ -523,51 +641,21 @@ class Check {
 	}
 
 	/**
-	 * Check sql.safe_mode
-	 *
-	 * @return OkStatus|WarningStatus
-	 */
-	protected function checkSqlSafeMode() {
-		$sqlSafeModeEnabled = FALSE;
-		if (version_compare(phpversion(), '5.4', '<')) {
-			$sqlSafeModeEnabled = filter_var(
-				ini_get('sql.safe_mode'),
-				FILTER_VALIDATE_BOOLEAN,
-				array(FILTER_REQUIRE_SCALAR, FILTER_NULL_ON_FAILURE)
-			);
-		}
-		if ($sqlSafeModeEnabled) {
-			$status = new WarningStatus();
-			$status->setTitle('sql.safe_mode is enabled');
-			$status->setMessage(
-				'This means that you can only connect to the database with a' .
-						' username corresponding to the user of the webserver process' .
-						' or file owner. Consult your ISP for information about this.' .
-						' The owner of the current file is: ' . get_current_user()
-			);
-		} else {
-			$status = new OkStatus();
-			$status->setTitle('PHP sql.safe_mode is off');
-		}
-		return $status;
-	}
-
-	/**
 	 * Check open_basedir
 	 *
-	 * @return NoticeStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkOpenBaseDir() {
 		$openBaseDirSetting = trim(ini_get('open_basedir'));
 		if (strlen($openBaseDirSetting) > 0) {
 			$status = new NoticeStatus();
-			$status->setTitle('open_basedir set');
+			$status->setTitle('PHP open_basedir is set');
 			$status->setMessage(
-				'open_basedir = ' . ini_get('open_basedir') .
-						' This restricts TYPO3 to open and include files only in this' .
-						' path. Please make sure that this does not prevent TYPO3 from running,' .
-						' if for example your TYPO3 CMS core is linked to a different directory' .
-						' not included in this path.'
+				'open_basedir = ' . ini_get('open_basedir') . LF .
+				'This restricts TYPO3 to open and include files only in this' .
+				' path. Please make sure that this does not prevent TYPO3 from running,' .
+				' if for example your TYPO3 CMS core is linked to a different directory' .
+				' not included in this path.'
 			);
 		} else {
 			$status = new OkStatus();
@@ -577,9 +665,73 @@ class Check {
 	}
 
 	/**
+	 * If xdebug is loaded, the default max_nesting_level of 100 must be raised
+	 *
+	 * @return StatusInterface
+	 */
+	protected function checkXdebugMaxNestingLevel() {
+		if (extension_loaded('xdebug')) {
+			$recommendedMaxNestingLevel = 250;
+			$currentMaxNestingLevel = ini_get('xdebug.max_nesting_level');
+			if ($currentMaxNestingLevel < $recommendedMaxNestingLevel) {
+				$status = new ErrorStatus();
+				$status->setTitle('PHP xdebug.max_nesting_level too low');
+				$status->setMessage(
+					'xdebug.max_nesting_level=' . $currentMaxNestingLevel . LF .
+					'This setting controls the maximum number of nested function calls to protect against' .
+					' infinite recursion. The current value is too low for TYPO3 CMS and must' .
+					' be either raised or xdebug unloaded. A value of ' . $recommendedMaxNestingLevel .
+					' is recommended. Warning: Expect fatal PHP errors in central parts of the CMS' .
+					' if the default value of 100 is not raised significantly to:' . LF .
+					'xdebug.max_nesting_level=' . $recommendedMaxNestingLevel
+				);
+			} else {
+				$status = new OkStatus();
+				$status->setTitle('PHP xdebug.max_nesting_level ok');
+			}
+		} else {
+			$status = new OkStatus();
+			$status->setTitle('PHP xdebug extension not loaded');
+		}
+		return $status;
+	}
+
+	/**
+	 * Check accessibility and functionality of OpenSSL
+	 *
+	 * @return StatusInterface
+	 */
+	protected function checkOpenSslInstalled() {
+		if (extension_loaded('openssl')) {
+			$testKey = @openssl_pkey_new();
+			if (is_resource($testKey)) {
+				openssl_free_key($testKey);
+				$status = new OkStatus();
+				$status->setTitle('PHP OpenSSL extension installed properly');
+			} else {
+				$status = new ErrorStatus();
+				$status->setTitle('PHP OpenSSL extension not working');
+				$status->setMessage(
+					'Something went wrong while trying to create a new private key for testing.' .
+					' Please check the integration of the PHP OpenSSL extension and if it is installed correctly.'
+				);
+			}
+		} else {
+			$status = new ErrorStatus();
+			$status->setTitle('PHP OpenSSL extension not loaded');
+			$status->setMessage(
+				'OpenSSL is a PHP extension to encrypt/decrypt data between requests.' .
+				' TYPO3 CMS requires it to be able to store passwords encrypted to improve the security on database layer.'
+			);
+		}
+
+		return $status;
+	}
+
+	/**
 	 * Check enabled suhosin
 	 *
-	 * @return NoticeStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkSuhosinLoaded() {
 		if ($this->isSuhosinLoaded()) {
@@ -590,9 +742,9 @@ class Check {
 			$status->setTitle('PHP suhosin extension not loaded');
 			$status->setMessage(
 				'suhosin is an extension to harden the PHP environment. In general, it is' .
-						' good to have it from a security point of view. While TYPO3 CMS works' .
-						' fine with suhosin, it has some requirements different from default settings' .
-						' to be set if enabled.'
+				' good to have it from a security point of view. While TYPO3 CMS works' .
+				' fine with suhosin, it has some requirements different from default settings' .
+				' to be set if enabled.'
 			);
 		}
 		return $status;
@@ -601,7 +753,7 @@ class Check {
 	/**
 	 * Check suhosin.request.max_vars
 	 *
-	 * @return ErrorStatus|InfoStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkSuhosinRequestMaxVars() {
 		$recommendedRequestMaxVars = 400;
@@ -609,12 +761,13 @@ class Check {
 			$currentRequestMaxVars = ini_get('suhosin.request.max_vars');
 			if ($currentRequestMaxVars < $recommendedRequestMaxVars) {
 				$status = new ErrorStatus();
-				$status->setTitle('PHP suhosin.request.max_vars not high enough');
+				$status->setTitle('PHP suhosin.request.max_vars too low');
 				$status->setMessage(
-					'suhosin.request.max_vars=' . $currentRequestMaxVars . '. This setting' .
-							' can lead to lost information if submitting big forms in TYPO3 CMS like' .
-							' it is done in the install tool. It is heavily recommended to raise this' .
-							' to at least ' . $recommendedRequestMaxVars
+					'suhosin.request.max_vars=' . $currentRequestMaxVars . LF .
+					'This setting can lead to lost information if submitting big forms in TYPO3 CMS like' .
+					' it is done in the install tool. It is heavily recommended to raise this' .
+					' to at least ' . $recommendedRequestMaxVars . ':' . LF .
+					'suhosin.request.max_vars=' . $recommendedRequestMaxVars
 				);
 			} else {
 				$status = new OkStatus();
@@ -625,7 +778,8 @@ class Check {
 			$status->setTitle('Suhosin not loaded');
 			$status->setMessage(
 				'If enabling suhosin, suhosin.request.max_vars' .
-						' should be set to at least ' . $recommendedRequestMaxVars
+				' should be set to at least ' . $recommendedRequestMaxVars . ':' . LF .
+				'suhosin.request.max_vars=' . $recommendedRequestMaxVars
 			);
 		}
 		return $status;
@@ -634,7 +788,7 @@ class Check {
 	/**
 	 * Check suhosin.post.max_vars
 	 *
-	 * @return ErrorStatus|InfoStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkSuhosinPostMaxVars() {
 		$recommendedPostMaxVars = 400;
@@ -642,12 +796,13 @@ class Check {
 			$currentPostMaxVars = ini_get('suhosin.post.max_vars');
 			if ($currentPostMaxVars < $recommendedPostMaxVars) {
 				$status = new ErrorStatus();
-				$status->setTitle('PHP suhosin.post.max_vars not high enough');
+				$status->setTitle('PHP suhosin.post.max_vars too low');
 				$status->setMessage(
-					'suhosin.post.max_vars=' . $currentPostMaxVars . '. This setting' .
-							' can lead to lost information if submitting big forms in TYPO3 CMS like' .
-							' it is done in the install tool. It is heavily recommended to raise this' .
-							' to at least ' . $recommendedPostMaxVars
+					'suhosin.post.max_vars=' . $currentPostMaxVars . LF .
+					'This setting can lead to lost information if submitting big forms in TYPO3 CMS like' .
+					' it is done in the install tool. It is heavily recommended to raise this' .
+					' to at least ' . $recommendedPostMaxVars . ':' . LF .
+					'suhosin.post.max_vars=' . $recommendedPostMaxVars
 				);
 			} else {
 				$status = new OkStatus();
@@ -658,7 +813,8 @@ class Check {
 			$status->setTitle('Suhosin not loaded');
 			$status->setMessage(
 				'If enabling suhosin, suhosin.post.max_vars' .
-						' should be set to at least ' . $recommendedPostMaxVars
+				' should be set to at least ' . $recommendedPostMaxVars . ':' . LF .
+				'suhosin.post.max_vars=' . $recommendedPostMaxVars
 			);
 		}
 		return $status;
@@ -667,7 +823,7 @@ class Check {
 	/**
 	 * Check suhosin.get.max_value_length
 	 *
-	 * @return ErrorStatus|InfoStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkSuhosinGetMaxValueLength() {
 		$recommendedGetMaxValueLength = 2000;
@@ -675,12 +831,13 @@ class Check {
 			$currentGetMaxValueLength = ini_get('suhosin.get.max_value_length');
 			if ($currentGetMaxValueLength < $recommendedGetMaxValueLength) {
 				$status = new ErrorStatus();
-				$status->setTitle('PHP suhosin.get.max_value_length not high enough');
+				$status->setTitle('PHP suhosin.get.max_value_length too low');
 				$status->setMessage(
-					'suhosin.get.max_value_length=' . $currentGetMaxValueLength . '. This setting' .
-							' can lead to lost information if submitting big forms in TYPO3 CMS like' .
-							' it is done in the install tool. It is heavily recommended to raise this' .
-							' to at least ' . $recommendedGetMaxValueLength
+					'suhosin.get.max_value_length=' . $currentGetMaxValueLength . LF .
+					'This setting can lead to lost information if submitting big forms in TYPO3 CMS like' .
+					' it is done in the install tool. It is heavily recommended to raise this' .
+					' to at least ' . $recommendedGetMaxValueLength . ':' . LF .
+					'suhosin.get.max_value_length=' . $recommendedGetMaxValueLength
 				);
 			} else {
 				$status = new OkStatus();
@@ -691,7 +848,8 @@ class Check {
 			$status->setTitle('Suhosin not loaded');
 			$status->setMessage(
 				'If enabling suhosin, suhosin.get.max_value_length' .
-						' should be set to at least ' . $recommendedGetMaxValueLength
+				' should be set to at least ' . $recommendedGetMaxValueLength . ':' . LF .
+				'suhosin.get.max_value_length=' . $recommendedGetMaxValueLength
 			);
 		}
 		return $status;
@@ -700,7 +858,7 @@ class Check {
 	/**
 	 * Check suhosin.executor.include.whitelist contains phar
 	 *
-	 * @return NoticeStatus|InfoStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkSuhosinExecutorIncludeWhiteListContainsPhar() {
 		if ($this->isSuhosinLoaded()) {
@@ -709,9 +867,10 @@ class Check {
 				$status = new NoticeStatus();
 				$status->setTitle('PHP suhosin.executor.include.whitelist does not contain phar');
 				$status->setMessage(
-					'suhosin.executor.include.whitelist= ' . implode(' ', $currentWhiteListArray) . '. phar' .
-							' is currently not a hard requirement of TYPO3 CMS but is nice to have and a possible requirement' .
-							' in future versions. A useful setting is "suhosin.executor.include.whitelist = phar vfs"'
+					'suhosin.executor.include.whitelist= ' . implode(' ', $currentWhiteListArray) . LF .
+					'"phar" is currently not a hard requirement of TYPO3 CMS but is nice to have and a possible' .
+					' requirement in future versions. A useful setting is:' . LF .
+					'suhosin.executor.include.whitelist=phar vfs'
 				);
 			} else {
 				$status = new OkStatus();
@@ -721,7 +880,8 @@ class Check {
 			$status = new InfoStatus();
 			$status->setTitle('Suhosin not loaded');
 			$status->setMessage(
-				'If enabling suhosin, a useful setting is "suhosin.executor.include.whitelist = phar vfs"'
+				'If enabling suhosin, a useful setting is:' . LF .
+				'suhosin.executor.include.whitelist=phar vfs'
 			);
 		}
 		return $status;
@@ -730,7 +890,7 @@ class Check {
 	/**
 	 * Check suhosin.executor.include.whitelist contains vfs
 	 *
-	 * @return NoticeStatus|InfoStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkSuhosinExecutorIncludeWhiteListContainsVfs() {
 		if ($this->isSuhosinLoaded()) {
@@ -739,10 +899,11 @@ class Check {
 				$status = new WarningStatus();
 				$status->setTitle('PHP suhosin.executor.include.whitelist does not contain vfs');
 				$status->setMessage(
-					'suhosin.executor.include.whitelist= ' . implode(' ', $currentWhiteListArray) . '. vfs' .
-							' is currently not a hard requirement of TYPO3 CMS but tons of unit tests rely on it.' .
-							' Furthermore, vfs is likely a base for an additional compatibilyt layer in the future.' .
-							' A useful setting is "suhosin.executor.include.whitelist = phar vfs"'
+					'suhosin.executor.include.whitelist= ' . implode(' ', $currentWhiteListArray) . LF .
+					'"vfs" is currently not a hard requirement of TYPO3 CMS but tons of unit tests rely on it.' .
+					' Furthermore, vfs is likely a base for an additional compatibility layer in the future.' .
+					' A useful setting is:' . LF .
+					'suhosin.executor.include.whitelist=phar vfs'
 				);
 			} else {
 				$status = new OkStatus();
@@ -752,22 +913,28 @@ class Check {
 			$status = new InfoStatus();
 			$status->setTitle('Suhosin not loaded');
 			$status->setMessage(
-				'If enabling suhosin, a useful setting is "suhosin.executor.include.whitelist = phar vfs"'
+				'If enabling suhosin, a useful setting is:' . LF .
+				'suhosin.executor.include.whitelist=phar vfs'
 			);
 		}
 		return $status;
 	}
 
 	/**
-	 * Check apt, xcache or eaccelerator is loaded
+	 * Check if some opcode cache is loaded
 	 *
-	 * @return WarningStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkSomePhpOpcodeCacheIsLoaded() {
-		$eAcceleratorLoaded = extension_loaded('eaccelerator');
-		$xCacheLoaded = extension_loaded('xcache');
-		$apcLoaded = extension_loaded('apc');
-		if ($eAcceleratorLoaded || $xCacheLoaded || $apcLoaded) {
+		if (
+			// Currently APCu identifies itself both as "apcu" and "apc" (for compatibility) although it doesn't provide the APC-opcache functionality
+			extension_loaded('eaccelerator')
+			|| extension_loaded('xcache')
+			|| (extension_loaded('apc') && !extension_loaded('apcu'))
+			|| extension_loaded('Zend Optimizer+')
+			|| extension_loaded('Zend OPcache')
+			|| extension_loaded('wincache')
+		) {
 			$status = new OkStatus();
 			$status->setTitle('A PHP opcode cache is loaded');
 		} else {
@@ -775,12 +942,12 @@ class Check {
 			$status->setTitle('No PHP opcode cache loaded');
 			$status->setMessage(
 				'PHP opcode caches hold a compiled version of executed PHP scripts in' .
-						' memory and do not require to recompile any script on each access.' .
-						' This can be a massive performance improvement and can put load off a' .
-						' server in general, a parse time reduction by factor three for full cached' .
-						' pages can be achieved easily if using some opcode cache.' .
-						' If in doubt choosing one, apc is officially supported by PHP and can be' .
-						' used as data cache layer in TYPO3 CMS as additional feature.'
+				' memory and do not require to recompile any script on each access.' .
+				' This can be a massive performance improvement and can put load off a' .
+				' server in general, a parse time reduction by factor three for full cached' .
+				' pages can be achieved easily if using some opcode cache.' .
+				' If in doubt choosing one, APC runs well and can be used as data' .
+				' cache layer in TYPO3 CMS as additional feature.'
 			);
 		}
 		return $status;
@@ -789,24 +956,24 @@ class Check {
 	/**
 	 * Check doc comments can be fetched by reflection
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkReflectionDocComment() {
 		$testReflection = new \ReflectionMethod(get_class($this), __FUNCTION__);
 		if (strlen($testReflection->getDocComment()) === 0) {
 			$status = new ErrorStatus();
-			$status->setTitle('Doc comment reflection broken');
+			$status->setTitle('PHP Doc comment reflection broken');
 			$status->setMessage(
 				'TYPO3 CMS core extensions like extbase and fluid heavily rely on method' .
-						' comment parsing to fetch annotations and add magic according to them.' .
-						' This does not work in the current environment and will lead to a lot of' .
-						' broken extensions. The PHP extension eaccelerator is known to break this if' .
-						' it is compiled without --with-eaccelerator-doc-comment-inclusion flag.' .
-						' This compile flag must be given, otherwise TYPO3 CMS is no fun.'
+				' comment parsing to fetch annotations and add magic according to them.' .
+				' This does not work in the current environment and will lead to a lot of' .
+				' broken extensions. The PHP extension eaccelerator is known to break this if' .
+				' it is compiled without --with-eaccelerator-doc-comment-inclusion flag.' .
+				' This compile flag must be given, otherwise TYPO3 CMS is no fun.'
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('Document comment reflection works');
+			$status->setTitle('PHP Doc comment reflection works');
 		}
 		return $status;
 	}
@@ -814,7 +981,7 @@ class Check {
 	/**
 	 * Checks thread stack size if on windows with apache
 	 *
-	 * @return WarningStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkWindowsApacheThreadStackSize() {
 		if (
@@ -825,15 +992,18 @@ class Check {
 			$status->setTitle('Windows apache thread stack size');
 			$status->setMessage(
 				'This current value can not be checked by the system, so please ignore this warning if it' .
-						' is already taken care off: Fluid uses complex regular expressions which require a lot' .
-						' of stack space during the first processing.' .
-						' On Windows the default stack size for Apache is a lot smaller than on unix.' .
-						' You can increase the size to 8MB (default on unix) by adding to the httpd.conf:' .
-						' ThreadStackSize 8388608. Restart Apache after this change.'
+				' is already taken care of: Fluid uses complex regular expressions which require a lot' .
+				' of stack space during the first processing.' .
+				' On Windows the default stack size for Apache is a lot smaller than on UNIX.' .
+				' You can increase the size to 8MB (default on UNIX) by adding the following configuration' .
+				' to httpd.conf and restart Apache afterwards:' . LF .
+				'<IfModule mpm_winnt_module>' . LF .
+				'ThreadStackSize 8388608' . LF .
+				'</IfModule>'
 			);
 		} else {
 			$status = new OkStatus();
-			$status->setTitle('ThreadStackSize is not an issue on unix systems');
+			$status->setTitle('Apache ThreadStackSize is not an issue on UNIX systems');
 		}
 		return $status;
 	}
@@ -842,7 +1012,7 @@ class Check {
 	 * Check if a specific required PHP extension is loaded
 	 *
 	 * @param string $extension
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkRequiredPhpExtension($extension) {
 		if (!extension_loaded($extension)) {
@@ -850,7 +1020,7 @@ class Check {
 			$status->setTitle('PHP extension ' . $extension . ' not loaded');
 			$status->setMessage(
 				'TYPO3 CMS uses PHP extension ' . $extension . ' but it is not loaded' .
-						' in your environment. Change your environment to provide this extension.'
+				' in your environment. Change your environment to provide this extension.'
 			);
 		} else {
 			$status = new OkStatus();
@@ -860,92 +1030,9 @@ class Check {
 	}
 
 	/**
-	 * Check smtp settings
-	 *
-	 * @return ErrorStatus|OkStatus|WarningStatus
-	 */
-	protected function checkMailCapabilities() {
-		if ($this->isWindowsOs()) {
-			$smtpIni = ini_get('SMTP');
-			$brokenSmtp = FALSE;
-			$smtpIpAddress = '';
-			if (!$this->isValidIp($smtpIni)) {
-				if (!$this->isValidIp(@gethostbyname($smtpIni))) {
-					$brokenSmtp = TRUE;
-				} else {
-					$smtpIpAddress = @gethostbyname($smtpIni);
-				}
-			} else {
-				$smtpIpAddress = $smtpIni;
-			}
-
-			$smtpPortIni = intval(ini_get('smtp_port'));
-			$brokenSmtpPort = FALSE;
-			if (intval($smtpPortIni) < 1 || intval($smtpPortIni) > 65535) {
-				$brokenSmtpPort = TRUE;
-			}
-
-			if ($brokenSmtp || $brokenSmtpPort) {
-				$status = new ErrorStatus();
-				$status->setTitle('Mail configuration is not set correctly');
-				$status->setMessage(
-					'PHP mail() function requires SMTP and smtp_port to have' .
-							' correct values on Windows. If installation is completed,' .
-							' the mail system can be tested in the install tool.'
-				);
-			} elseif ($smtpIpAddress === '127.0.0.1' || $smtpIpAddress === '::1') {
-				$status = new WarningStatus();
-				$status->setTitle('Mail is configured, potential problem exists');
-				$status->setMessage(
-					'smtp=' . $smtpIni . ' - This server! Are you sure it runs SMTP server?' .
-							' If installation is completed, the mail system can be tested in the install tool.'
-				);
-			} else {
-				$status = new OkStatus();
-				$status->setTitle('Mail is configured');
-				$status->setMessage(
-					'smtp=' . $smtpIni . ', smtp_port=' . ini_get('smtp_port') . '.' .
-							' Values for mail setup look ok. If installation is completed,' .
-							' the mail system can be tested in the install tool. '
-				);
-			}
-		} elseif (!ini_get('sendmail_path')) {
-			$status = new WarningStatus();
-			$status->setTitle('PHP sendmail_path not defined');
-			$status->setMessage(
-				'This may be critical to TYPO3\'s use of the mail() function.' .
-						' Your setup is rather uncommon. If installation is completed, the' .
-						' mail system can be tested in the install tool.'
-			);
-		} else {
-			list($mailBinary) = explode(' ', ini_get('sendmail_path'));
-			if (!@is_executable($mailBinary)) {
-				$status = new ErrorStatus();
-				$status->setTitle('Mail program not found or not executable');
-				$status->setMessage(
-					'sendmail_path = ' . ini_get('sendmail_path') .
-							' This may be critical to TYPO3\'s use of the mail() function. Please' .
-							' be sure that the mail() function in your php-installation works.  If' .
-							' installation is completed, the mail system can be tested in the install tool.'
-				);
-			} else {
-				$status = new OkStatus();
-				$status->setTitle('PHP sendmail path given');
-				$status->setMessage(
-					'sendmail_path = ' . ini_get('sendmail_path') . '.' .
-							' This setting is crucial for TYPO3\'s use of the mail() function. The' .
-							' current value looks fine. The mail system can be tested in the' .
-							' install tool if the installation is completed'
-				);
-			}
-		}
-		return $status;
-	}
-
-	/**
 	 * Check imagecreatetruecolor to verify gdlib works as expected
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkGdLibTrueColorSupport() {
 		if (function_exists('imagecreatetruecolor')) {
@@ -958,8 +1045,8 @@ class Check {
 				$status = new ErrorStatus();
 				$status->setTitle('PHP GD library true color support broken');
 				$status->setMessage(
-					'GD is loaded, but calling a imagecreatetruecolor returned an error.' .
-							' This must be fixed, TYPO3 CMS won\'t work well otherwise'
+					'GD is loaded, but calling imagecreatetruecolor() fails.' .
+					' This must be fixed, TYPO3 CMS won\'t work well otherwise.'
 				);
 			}
 		} else {
@@ -975,7 +1062,7 @@ class Check {
 	/**
 	 * Check gif support of GD library
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkGdLibGifSupport() {
 		if (
@@ -983,7 +1070,7 @@ class Check {
 			&& function_exists('imagegif')
 			&& (imagetypes() & IMG_GIF)
 		) {
-			$imageResource = @imagecreatefromgif(__DIR__ . '/TestImages/jesus.gif');
+			$imageResource = @imagecreatefromgif(__DIR__ . '/../../Resources/Public/Images/TestInput/Test.gif');
 			if (is_resource($imageResource)) {
 				imagedestroy($imageResource);
 				$status = new OkStatus();
@@ -992,8 +1079,8 @@ class Check {
 				$status = new ErrorStatus();
 				$status->setTitle('PHP GD library gif support broken');
 				$status->setMessage(
-					'GD is loaded, but calling a gif related message gives errors.' .
-							' This must be fixed, TYPO3 CMS won\'t work well otherwise'
+					'GD is loaded, but calling imagecreatefromgif() fails.' .
+					' This must be fixed, TYPO3 CMS won\'t work well otherwise.'
 				);
 			}
 		} else {
@@ -1001,7 +1088,7 @@ class Check {
 			$status->setTitle('PHP GD library gif support missing');
 			$status->setMessage(
 				'GD must be compiled with gif support. This is essential for' .
-						' TYPO3 CMS to work properly.'
+				' TYPO3 CMS to work properly.'
 			);
 		}
 		return $status;
@@ -1010,7 +1097,7 @@ class Check {
 	/**
 	 * Check jgp support of GD library
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkGdLibJpgSupport() {
 		if (
@@ -1021,11 +1108,11 @@ class Check {
 			$status = new OkStatus();
 			$status->setTitle('PHP GD library has jpg support');
 		} else {
-			$status = new ErrorStatus();
+			$status= new ErrorStatus();
 			$status->setTitle('PHP GD library jpg support missing');
 			$status->setMessage(
 				'GD must be compiled with jpg support. This is essential for' .
-						' TYPO3 CMS to work properly.'
+				' TYPO3 CMS to work properly.'
 			);
 		}
 		return $status;
@@ -1034,7 +1121,7 @@ class Check {
 	/**
 	 * Check png support of GD library
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkGdLibPngSupport() {
 		if (
@@ -1042,7 +1129,7 @@ class Check {
 			&& function_exists('imagepng')
 			&& (imagetypes() & IMG_PNG)
 		) {
-			$imageResource = @imagecreatefrompng(__DIR__ . '/TestImages/jesus.png');
+			$imageResource = @imagecreatefrompng(__DIR__ . '/../../Resources/Public/Images/TestInput/Test.png');
 			if (is_resource($imageResource)) {
 				imagedestroy($imageResource);
 				$status = new OkStatus();
@@ -1051,9 +1138,9 @@ class Check {
 				$status = new ErrorStatus();
 				$status->setTitle('PHP GD library png support broken');
 				$status->setMessage(
-					'GD is compiled with png support, but a test call fails.' .
-							' Check your environment and fix it, png in GD lib is important' .
-							' for TYPO3 CMS to work properly.'
+					'GD is compiled with png support, but calling imagecreatefrompng() fails.' .
+					' Check your environment and fix it, png in GD lib is important' .
+					' for TYPO3 CMS to work properly.'
 				);
 			}
 		} else {
@@ -1061,7 +1148,7 @@ class Check {
 			$status->setTitle('PHP GD library png support missing');
 			$status->setMessage(
 				'GD must be compiled with png support. This is essential for' .
-						' TYPO3 CMS to work properly'
+				' TYPO3 CMS to work properly'
 			);
 		}
 		return $status;
@@ -1070,41 +1157,87 @@ class Check {
 	/**
 	 * Check gdlib supports freetype
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkGdLibFreeTypeSupport() {
 		if (function_exists('imagettftext')) {
 			$status = new OkStatus();
-			$status->setTitle('PHP GD library has freettype font support');
+			$status->setTitle('PHP GD library has freetype font support');
 			$status->setMessage(
 				'There is a difference between the font size setting the GD' .
-						' library should be feeded with. If installation is completed' .
-						' a test in the install tool helps to find out the value you need'
+				' library should be feeded with. If installation is completed' .
+				' a test in the install tool helps to find out the value you need.'
 			);
 		} else {
 			$status = new ErrorStatus();
 			$status->setTitle('PHP GD library freetype support missing');
 			$status->setMessage(
 				'Some core functionality and extension rely on the GD' .
-						' to render fonts on images. This support is missing' .
-						' in your environment. Install it.'
+				' to render fonts on images. This support is missing' .
+				' in your environment. Install it.'
 			);
 		}
 		return $status;
 	}
 
 	/**
+	 * Create true type font test image
+	 *
+	 * @return StatusInterface
+	 */
+	protected function isTrueTypeFontDpiStandard() {
+		if (function_exists('imageftbbox')) {
+			// 20 Pixels at 96 DPI - the DefaultConfiguration
+			$fontSize = (20 / 96 * 72);
+			$textDimensions = @imageftbbox(
+				$fontSize,
+				0,
+				__DIR__ . '/../../Resources/Private/Font/vera.ttf',
+				'Testing true type support'
+			);
+			$fontBoxWidth = $textDimensions[2] - $textDimensions[0];
+			if ($fontBoxWidth < 300 && $fontBoxWidth > 200) {
+				$status = new OkStatus();
+				$status->setTitle('FreeType True Type Font DPI');
+				$status->setMessage('Fonts are rendered by FreeType library. ' .
+					'We need to ensure that the final dimensions are as expected. ' .
+					'This server renderes fonts based on 96 DPI correctly'
+				);
+			} else {
+				$status = new NoticeStatus();
+				$status->setTitle('FreeType True Type Font DPI');
+				$status->setMessage('Fonts are rendered by FreeType library. ' .
+					'This server renders fonts not as expected. ' .
+					'Please configure FreeType or TYPO3_CONF_VARS[GFX][TTFdpi]'
+				);
+			}
+		} else {
+			$status = new ErrorStatus();
+			$status->setTitle('PHP GD library freetype2 support missing');
+			$status->setMessage(
+				'The core relies on GD library compiled into PHP with freetype2' .
+				' support. This is missing on your system. Please install it.'
+			);
+		}
+
+		return $status;
+	}
+
+	/**
 	 * Check php magic quotes
 	 *
-	 * @return OkStatus|WarningStatus
+	 * @return StatusInterface
 	 */
 	protected function checkPhpMagicQuotes() {
-		if (get_magic_quotes_gpc()) {
+		$magicQuotesGpc = get_magic_quotes_gpc();
+		if ($magicQuotesGpc) {
 			$status = new WarningStatus();
 			$status->setTitle('PHP magic quotes on');
 			$status->setMessage(
-				'PHP ini setting magic_quotes_gpc in on. The setting is deprecated since PHP 5.3.' .
-						' You are advised to set it to "Off" until it gets completely removed.'
+				'magic_quotes_gpc=' . $magicQuotesGpc . LF .
+				'Setting magic_quotes_gpc is deprecated since PHP 5.3.' .
+				' You are advised to disable it until it gets completely removed:' . LF .
+				'magic_quotes_gpc=Off'
 			);
 		} else {
 			$status = new OkStatus();
@@ -1116,7 +1249,7 @@ class Check {
 	/**
 	 * Check register globals
 	 *
-	 * @return ErrorStatus|OkStatus
+	 * @return StatusInterface
 	 */
 	protected function checkRegisterGlobals() {
 		$registerGlobalsEnabled = filter_var(
@@ -1128,9 +1261,11 @@ class Check {
 			$status = new ErrorStatus();
 			$status->setTitle('PHP register globals on');
 			$status->setMessage(
+				'register_globals=' . ini_get('register_globals') . LF .
 				'TYPO3 requires PHP setting "register_globals" set to off.' .
-						' This ancient PHP setting is a big security problem and should' .
-						' never be enabled.'
+				' This ancient PHP setting is a big security problem and should' .
+				' never be enabled:' . LF .
+				'register_globals=Off'
 			);
 		} else {
 			$status = new OkStatus();
@@ -1160,7 +1295,7 @@ class Check {
 	 */
 	protected function isWindowsOs() {
 		$windowsOs = FALSE;
-		if (stristr(PHP_OS, 'darwin') && stristr(PHP_OS, 'win')) {
+		if (!stristr(PHP_OS, 'darwin') && stristr(PHP_OS, 'win')) {
 			$windowsOs = TRUE;
 		}
 		return $windowsOs;
@@ -1218,97 +1353,129 @@ class Check {
 	}
 }
 
-$check = new Check();
-$statuses = $check->getStatus();
+/**
+ * Utility methods to handle status objects. Provides some helper
+ * methods to filter, sort and render status objects.
+ */
+class StatusUtility {
 
-function printStatus($statuses) {
+	/**
+	 * Order status objects by severity
+	 *
+	 * @param array<\TYPO3\CMS\Install\Status\StatusInterface> $statusObjects Status objects in random order
+	 * @return array With sub arrays by severity
+	 * @throws Exception
+	 */
+	public function sortBySeverity(array $statusObjects = array()) {
+		$orderedStatus = array(
+			'error' => $this->filterBySeverity($statusObjects, 'error'),
+			'warning' => $this->filterBySeverity($statusObjects, 'warning'),
+			'ok' => $this->filterBySeverity($statusObjects, 'ok'),
+			'information' => $this->filterBySeverity($statusObjects, 'information'),
+			'notice' => $this->filterBySeverity($statusObjects, 'notice'),
+		);
+		return $orderedStatus;
+	}
+
+	/**
+	 * Filter a list of status objects by severity
+	 *
+	 * @param array $statusObjects Given list of status objects
+	 * @param string $severity Severity identifier
+	 * @throws Exception
+	 * @return array List of status objects with given severity
+	 */
+	public function filterBySeverity(array $statusObjects = array(), $severity = 'ok') {
+		$filteredObjects = array();
+		/** @var $status StatusInterface */
+		foreach ($statusObjects as $status) {
+			if (!$status instanceof StatusInterface) {
+				throw new Exception(
+					'Object must implement StatusInterface',
+					1366919442
+				);
+			}
+			if ($status->getSeverity() === $severity) {
+				$filteredObjects[] = $status;
+			}
+		}
+		return $filteredObjects;
+	}
+
+}
+
+class StatusView {
+
+}
+
+$check = new Check();
+$statusObjects = $check->getStatus();
+
+$statusUtility = new StatusUtility();
+$sortedStatusObjects = $statusUtility->sortBySeverity($statusObjects);
+
+function printStatus($sortedStatusObjects) {
 	$content = '';
 	$mode = '';
 
-	foreach ($statuses as $status) {
-		switch (get_class($status)) {
-			case 'OkStatus':
-			{
-				$mode = 'ok';
-				break;
-			}
+	foreach ($sortedStatusObjects as $severity => $statusObjects) {
+		$content .= '<h2>' .
+				ucfirst($severity) .
+				'<span class="pager">' . count($statusObjects) . '</span>' .
+				'</h2>';
 
-			case 'WarningStatus':
-			{
-				$mode = 'warning';
-				break;
-			}
-
-			case 'NoticeStatus':
-			{
-				$mode = 'notice';
-				break;
-			}
-
-			case 'InfoStatus':
-			{
-				$mode = 'info';
-				break;
-			}
-			
-			case 'ErrorStatus':
-			{
-				$mode = 'error';
-				break;
-			}
+		foreach ($statusObjects as $status) {
+			$content .= '<div class="' . $status->getSeverity() . '">';
+			$content .= '<h3>';
+			$content .= $status->getTitle();
+			$content .= '</h3>';
+			$content .= '<p>';
+			$content .= $status->getMessage();
+			$content .= '</p>';
+			$content .= '</div>';
 		}
-
-		$content .= '<div class="' . $mode . '">';
-		$content .= '<h2>';
-		$content .= $status->getTitle();
-		$content .= '</h2>';
-		$content .= '<p>';
-		$content .= $status->getMessage();
-		$content .= '</p>';
-		$content .= '</div>';
 	}
+
 	return $content;
 }
 
 if (PHP_SAPI === 'cli') {
-    foreach ($statuses as $status) {
-        /** @var StatusInterface $status */
-        switch (get_class($status)) {
-            case 'OkStatus':
-            {
-                $mode = "\033[32m" . "OK";
-                break;
-            }
+	foreach ($statuses as $status) {
+		/** @var StatusInterface $status */
+		switch (get_class($status)) {
+			case 'OkStatus': {
+				$mode = "\033[32m" . "OK";
+				break;
+			}
 
-            case 'WarningStatus':
-            {
-                $mode = "\033[33m" . "WARNING";
-                break;
-            }
+			case 'WarningStatus': {
+				$mode = "\033[33m" . "WARNING";
+				break;
+			}
 
-            case 'NoticeStatus':
-            {
-                $mode = "\033[36m" . "NOTICE";
-                break;
-            }
+			case 'NoticeStatus': {
+				$mode = "\033[36m" . "NOTICE";
+				break;
+			}
 
-            case 'InfoStatus':
-            {
-                $mode = "\033[36m" . "INFO";
-                break;
-            }
+			case 'InfoStatus': {
+				$mode = "\033[36m" . "INFO";
+				break;
+			}
 
-            case 'ErrorStatus':
-            {
-                $mode = "\033[31m" . "ERROR";
-                break;
-            }
-        }
-        print $mode . "\t" . $status->getTitle() . "\033[0m\n";
-        if ($status->getMessage())
-            print "\t\t\t" . $status->getMessage() . "\n";
-    }
-    die();
+			case 'ErrorStatus':
+			{
+				$mode = "\033[31m" . "ERROR";
+				break;
+			}
+		}
+		print $mode . "\t" . $status->getTitle() . "\033[0m\n";
+
+		if ($status->getMessage()) {
+			print "\t\t\t" . $status->getMessage() . "\n";
+		}
+	}
+	die();
 }
 
 ?>
@@ -1329,29 +1496,84 @@ if (PHP_SAPI === 'cli') {
 				font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 				font-size: 13px;
 				line-height: 1.3em;
-				padding: 30px;
+				padding: 30px 60px;
 				width: 700px;
 			}
 
 			footer { color: #4f4f4f; font-size: 12px; line-height: 1.2em; padding: 30px 60px 0 0; }
 
-			p { padding: 0; }
+			p { padding: 0; margin: 0 0 10px; }
+				div p { margin-bottom: 0; }
 			a { color: #4f4f4f; }
 
-			h2 { font-size: 1.1em; margin-top: 0; }
-			h1 { font-size: 1.5em; }
+			h3 { font-size: 1.1em; margin-top: 0; }
+			h2 { font-size: 1.4em; margin-top: 40px; }
+			h1 { font-size: 1.7em; }
 
-			.logo { margin-bottom: 30px; padding-left: 5px; }
+			.logo { margin-bottom: 50px; margin-left: -45px; padding-left: 5px; }
 			.well { margin-bottom: 30px; }
 			p.well { font-size: 14px; }
 
 			div { padding: 10px 20px 10px 40px; border: 1px solid; margin-bottom: 10px; background: transparent 10px 10px no-repeat; border-radium: 1px; }
 
-			.notice { border-color: #C2CBCF; background-color: #F6F7FA; background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAvVBMVEXU1NTy8vLc3Nzt7e3Pz8/z8/PT09PY2Njb29vm5ubi4uLq6ur09PT19fWpqanQ0NDr6+ufn5/Dw8PJycnx8fHf39/Z2dn7+/vLy8vn5+fv7++jo6Pw8PD5+fnR0dGurq6cnJy7u7vMzMz39/e+vr7BwcGwsLDl5eXNzc3s7OyysrLu7u7j4+Ovr6/V1dXOzs69vb21tbXk5OT29vbGxsb6+vrKysrd3d2xsbHHx8fp6eng4OD9/f3+/v7l4+OE80p/AAAAP3RSTlP//////////////////////////////////////////////////////////////////////////////////wCOJnwXAAAAmklEQVR42m3P1xKCMBCF4QQSekCagBR7710T8f0fS1kcLxj+u/PN7MWid6M2sHpyhydzQ2gqAqDlPwJglq9fZQzAo6w60k9ifAFIorVscn0jpPMUILxW2xBSlw0BtGV419B379gRQDHyHCuSigprWwPxg4CoyNlTuwZ88LIRchY3nAIQyv1CMIti7ALET28ye6z6duoOWp9r9AHbjytSNYDAAAAAAABJRU5ErkJggg==); }
-			.info { border-color: #8AAFC4; background-color: #DDEEF9; background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACm0lEQVR42qWT3U+SYRiH+1v0T+h9O2ltetBcmw3yTTvIrGGaqK10FWaDVYqJ+AUoYEMwP/KD8gtKUoQEXsnekI/Q1DcHZtDWVieQtSx/PdKGtVwnHlwnz577up/f7uc+BOBA/HOQp1/JPKkNS3PVIf54sy+RreQSWcoFPkvplR67x2b+VyDQLTMnVMF4eU8APc4oRtnNFCZ7BCLdC9DS2TgtszP7CkhXJqfFn2yeXIXNF0f3dBRy8xvcHV6GyrIKs2sDDaNh0BUTSfrKBPOXIFcTyshpXYztFltexiElRTcHghjyvMOQewM3egOQ9AfRO7sO+aMA6FJzjC4ZzkgLclSLsjKDD1buA2oHwpCQCNeMfnz5tp2iysihqpuD5IEPA88jONv0DFRhvywtyG7leJM9Co2Fx/UeP6qNPlQZOPQ519FLqOhif6P3kFhB6KZXQBcY+bTgqJzdGl94j9q+AOn0CpX3veQyCwDYIYi1bpR1zBFcuKx3w8xGQDGdW2kBLXNujXk3d7OmOpXrPKTIg3D0M5Jft1Ha7kRJmwMXCWK1AyPzRCBU/ymw8wY7D8XjJVTqvRB3unFJM4fXkU9E8B3FyhkUk9yiJhtqullobCHQp9r5PUGNTVakcmLIFUWlloVY5YKN28CPnzupCIG3H1EktxIs6HoSRsGtUSJok+0Jro5l0GJz7M6IH732NZSqHBA1T+O8YgpF9Racq5tAYd04WkZ8ZLzz5PmKGC1UpMeYghINMofzTUnpIAfTzAokBjd58lNcaLCiWuuAzhKEpI8FLahPkmJm369MFZgYKr8rfub2JDRTS3jo5glraLeGkFdrBiVoiNPCRua/y0Sf1mVSTIeUylPzlLApQQkaE6QjT5AeEdbvu0wH4hc4hsvsbED0hwAAAABJRU5ErkJggg==); }
-			.ok { border-color: #58B549; background-color: #CDEACA; background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACnUlEQVR42qWT/UsTcRzH+zt2t50pSCAjChEkhNpPQSKx02wo5sOyNN1uDz7SNmPYTIsycj6MkVJaZqnV5pzZ1KnNrSll4rJTQsz90gPVhtGDvftyP8wi8Rd/eMFx3Ov1ue9977sHwK7470ah/3BC3vQhQ443lc98eiAifyKNyN1JvNyVZMhw7EvYMZDvS2MV3pSw3qvArZAV/cvdAl2LLSh1H4esjwnLehl22wCZymaNJ0evzZngWh2A/fV1mOeqQBCunav9aJqpxkG7OJpiF7P/BHK9qfFZnuR1IgsP1gbLURkohXbmLPSECkKN/xwcb+/j0lQlpFZ6XXqDjo8FFJ5kIzeWLUwmsiByvtNQTRdBNVUIzVQRPGtDMPrUcJJIXu9RJF6ljbFA5hMp3xVqgS3UjEp/CdTPlEQsgHqS4C3A+Ds3ACAcXUP7yybY55oQ10DzscAxR+LGw5U7qAtqofMVkzcZxOKneXATRRhbGxbkX5s/0f7iMowTJegPdUFiojZiAdkDZmNguQemAIe6gA5fvn8WpI/f3sdk62wDNO4cGDxnMBDqhKT270Avw9+cb0bHwhXoJ5Ww+GsQ/fFVkDd/b8L6/CLKXdnQkkBrsB4dPguYamprCWm3JUblYDocK/dQM6GExnMK9dMVWPqwgPbZRpQNnYDKeRJ6Vy4cb3qQYTsCpora+ogpNnH8frI1Fq8Wj/i7qBrNh24kF9ywAmonQZBz8HipG6bhEkg0onVGQ8W2USCpmWbjGqmo2VMOJ4m0BS0wjBbj/IgSbWQJDiIbXMUQl4miRGa3/ZX3NtIsY6bC8k4ZOgIW9L2yoW/eBqvPjPTWNEhUojDDEXmnw8RcoBMYI2VgaileohNFJJwoQibyBANTRm17mHbFH2fQrOV6oi5QAAAAAElFTkSuQmCC); }
-			.warning { border-color: #C4B70D; background-color: #FBFFB3; background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACMklEQVR42qWTXUhTYRjHBwMhsCCDuoggahUhopKZjfQq6EKICmtjrS7EC4O68Cq6KCIQg6QuXFJUgjMKrShr9mHRjEFp3+k+zj501nE7+2zb2TlrO1//Xk7ahMgSL343z8vv9/BcvBoAS+KvDwl7vTb+YpczNqx3RJ7u1C46QOTLGWc70l/OgRnacWxRASKXRYf1rCxkIKRcCD/cnpy5v63svwPRZ3obS1mgSFkoAoP0xCXQd6u7Fw4U5arIkzoZcgGFqAVCvIdEEvjaXylN36qo+meAyE4u2E/8JNx9DSoS70TGY8VUX7ljwUDkcZ0pOdoGKAVwgaNwWRtUOK8ZiphE6Hkr/Nc3m+Y78+XSsK028SM2ClkIg/Mdgau3XoX1GCBl34CjR+C9qpuhujeU/hEIP6odSI93kk0x5MMWEjBjcnDPbOAQeL8Zcn4KzMhpOC+u65jz5mRdaLBGVMQsRNaBXMCsBnLBFsTfGcC6D4L3NiHPWCByND53rCl8OLtK9zsQelDzNuO5AbnAIB+6gJzfRAKHiye4m8BTB8C590HKUQjZz2Ps1AqbGiByY8TeDEXiIKSGwPuMKlmKbPYYiWwE5zWQwH5wnr3I+ZrVM8e7dsNxoqRRQ9+rpnn6pRpQxBTh+y+klEpxlpwlQeYs4h/v4FWrltJ8G6i0Tt+uQPBmOSZ7tyLQswW+a5vgvbIR7q71mOhci0/tq/H+zEqMnVyO123L4DheAiLD3qKxLvk7/wRGMAClf/I+KAAAAABJRU5ErkJggg==); }
-			.error { border-color: #DC4C42; background-color: #FBB19B; background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACZklEQVR42qWT+0tTYRjH+1s0TLsQEkH4g+aUYXYxdsxL22EXndtqeWFkUp65m+SKRBdiEqFmDoWgwAoqNZGQiDDKIupkpOtsbW7qPGfzzIJv5xzsjEj8xQe+v7y8n++X53nedxeAHem/g9/t5zI3PBYq5TLR6w4jm7DXsGyrno5f1lIrl8jMbQ0EkEi5zMFldz04vw/8owFJrL8bYcqMJVt1MNxUQWxpkHKbCd5Zx8V7Pfg1MQp+6BqS3vOS+LtebIyPIOprww+rilu0lBH/GPBOU0ayzcis9rolOOGqkfS3WLsebKsOqad+RG5cwbfaUoY2lGTIBkKf9qjTmoadBnAOg2wg9I/VFi1Wmknwj4cx30jiE1lklw2EC7TYJz/YIYJy4mZJ4LJNg2ijGvGbLkRvefG+Kp+WDWLN6iT/ZBCcxySCcuJmSeBS/VlErNUIN2gRH7mNWSIvKRuEmyqT62MDWHMYRVBO3Pg8J/IS+NNShZCpEiErifhwH16XHU4bMBdU9Gp/J7g+jwjKifE7XWAf+CUwaKwAYziDJS+FUHc7Zkpz0y0smE/Zv9t0WB+7J4Jy4mZJYEBfjkUtgbXRfrzTn8a08kB6iF9rjmV80SmZYEcLEg+H5MSYzyvsvkMCF0iVBM9TDZgq3sdMKnLkNUr6qFEQc9UFXMBzEdz9QUSvC4/GpEGgTo3IVUoYnAC3NuBFUQ43UbiH2PIpvy3PI96ojgQ/1KoQ6hLmMdCDWH8PmE43ZskTmCjMDj4vyCK2/UyvTh7KnDmeS70sOUhPK/ezU8V72UlFNj1+NIt6lr97y8+0I/0Bcq/UGoJ9DNcAAAAASUVORK5CYII=); }
+			.pager {
+				background-color: #C2CBCF;
+				border-radius: 5px;
+				border: 1px solid #fff;
+				color: #fff;
+				display: inline-block;
+				line-height: 1em;
+				font-size: 0.6em;
+				font-weight: bold;
+				min-width: 1em;
+				text-align: center;
+				vertical-align: middle;
+				padding: 2px;
+				margin-left: 5px;
+				margin-top: -10px;
+			}
+
+			.notice {
+				border-color: #C2CBCF;
+				background-color: #F6F7FA;
+				background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAvVBMVEXU1NTy8vLc3Nzt7e3Pz8/z8/PT09PY2Njb29vm5ubi4uLq6ur09PT19fWpqanQ0NDr6+ufn5/Dw8PJycnx8fHf39/Z2dn7+/vLy8vn5+fv7++jo6Pw8PD5+fnR0dGurq6cnJy7u7vMzMz39/e+vr7BwcGwsLDl5eXNzc3s7OyysrLu7u7j4+Ovr6/V1dXOzs69vb21tbXk5OT29vbGxsb6+vrKysrd3d2xsbHHx8fp6eng4OD9/f3+/v7l4+OE80p/AAAAP3RSTlP//////////////////////////////////////////////////////////////////////////////////wCOJnwXAAAAmklEQVR42m3P1xKCMBCF4QQSekCagBR7710T8f0fS1kcLxj+u/PN7MWid6M2sHpyhydzQ2gqAqDlPwJglq9fZQzAo6w60k9ifAFIorVscn0jpPMUILxW2xBSlw0BtGV419B379gRQDHyHCuSigprWwPxg4CoyNlTuwZ88LIRchY3nAIQyv1CMIti7ALET28ye6z6duoOWp9r9AHbjytSNYDAAAAAAABJRU5ErkJggg==);
+			}
+			.information {
+				border-color: #8AAFC4;
+				background-color: #DDEEF9;
+				background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACm0lEQVR42qWT3U+SYRiH+1v0T+h9O2ltetBcmw3yTTvIrGGaqK10FWaDVYqJ+AUoYEMwP/KD8gtKUoQEXsnekI/Q1DcHZtDWVieQtSx/PdKGtVwnHlwnz577up/f7uc+BOBA/HOQp1/JPKkNS3PVIf54sy+RreQSWcoFPkvplR67x2b+VyDQLTMnVMF4eU8APc4oRtnNFCZ7BCLdC9DS2TgtszP7CkhXJqfFn2yeXIXNF0f3dBRy8xvcHV6GyrIKs2sDDaNh0BUTSfrKBPOXIFcTyshpXYztFltexiElRTcHghjyvMOQewM3egOQ9AfRO7sO+aMA6FJzjC4ZzkgLclSLsjKDD1buA2oHwpCQCNeMfnz5tp2iysihqpuD5IEPA88jONv0DFRhvywtyG7leJM9Co2Fx/UeP6qNPlQZOPQ519FLqOhif6P3kFhB6KZXQBcY+bTgqJzdGl94j9q+AOn0CpX3veQyCwDYIYi1bpR1zBFcuKx3w8xGQDGdW2kBLXNujXk3d7OmOpXrPKTIg3D0M5Jft1Ha7kRJmwMXCWK1AyPzRCBU/ymw8wY7D8XjJVTqvRB3unFJM4fXkU9E8B3FyhkUk9yiJhtqullobCHQp9r5PUGNTVakcmLIFUWlloVY5YKN28CPnzupCIG3H1EktxIs6HoSRsGtUSJok+0Jro5l0GJz7M6IH732NZSqHBA1T+O8YgpF9Racq5tAYd04WkZ8ZLzz5PmKGC1UpMeYghINMofzTUnpIAfTzAokBjd58lNcaLCiWuuAzhKEpI8FLahPkmJm369MFZgYKr8rfub2JDRTS3jo5glraLeGkFdrBiVoiNPCRua/y0Sf1mVSTIeUylPzlLApQQkaE6QjT5AeEdbvu0wH4hc4hsvsbED0hwAAAABJRU5ErkJggg==); }
+			.ok {
+				border-color: #58B549;
+				background-color: #CDEACA;
+				background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACnUlEQVR42qWT/UsTcRzH+zt2t50pSCAjChEkhNpPQSKx02wo5sOyNN1uDz7SNmPYTIsycj6MkVJaZqnV5pzZ1KnNrSll4rJTQsz90gPVhtGDvftyP8wi8Rd/eMFx3Ov1ue9977sHwK7470ah/3BC3vQhQ443lc98eiAifyKNyN1JvNyVZMhw7EvYMZDvS2MV3pSw3qvArZAV/cvdAl2LLSh1H4esjwnLehl22wCZymaNJ0evzZngWh2A/fV1mOeqQBCunav9aJqpxkG7OJpiF7P/BHK9qfFZnuR1IgsP1gbLURkohXbmLPSECkKN/xwcb+/j0lQlpFZ6XXqDjo8FFJ5kIzeWLUwmsiByvtNQTRdBNVUIzVQRPGtDMPrUcJJIXu9RJF6ljbFA5hMp3xVqgS3UjEp/CdTPlEQsgHqS4C3A+Ds3ACAcXUP7yybY55oQ10DzscAxR+LGw5U7qAtqofMVkzcZxOKneXATRRhbGxbkX5s/0f7iMowTJegPdUFiojZiAdkDZmNguQemAIe6gA5fvn8WpI/f3sdk62wDNO4cGDxnMBDqhKT270Avw9+cb0bHwhXoJ5Ww+GsQ/fFVkDd/b8L6/CLKXdnQkkBrsB4dPguYamprCWm3JUblYDocK/dQM6GExnMK9dMVWPqwgPbZRpQNnYDKeRJ6Vy4cb3qQYTsCpora+ogpNnH8frI1Fq8Wj/i7qBrNh24kF9ywAmonQZBz8HipG6bhEkg0onVGQ8W2USCpmWbjGqmo2VMOJ4m0BS0wjBbj/IgSbWQJDiIbXMUQl4miRGa3/ZX3NtIsY6bC8k4ZOgIW9L2yoW/eBqvPjPTWNEhUojDDEXmnw8RcoBMYI2VgaileohNFJJwoQibyBANTRm17mHbFH2fQrOV6oi5QAAAAAElFTkSuQmCC);
+			}
+			.warning {
+				border-color: #C4B70D;
+				background-color: #FBFFB3;
+				background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACMklEQVR42qWTXUhTYRjHBwMhsCCDuoggahUhopKZjfQq6EKICmtjrS7EC4O68Cq6KCIQg6QuXFJUgjMKrShr9mHRjEFp3+k+zj501nE7+2zb2TlrO1//Xk7ahMgSL343z8vv9/BcvBoAS+KvDwl7vTb+YpczNqx3RJ7u1C46QOTLGWc70l/OgRnacWxRASKXRYf1rCxkIKRcCD/cnpy5v63svwPRZ3obS1mgSFkoAoP0xCXQd6u7Fw4U5arIkzoZcgGFqAVCvIdEEvjaXylN36qo+meAyE4u2E/8JNx9DSoS70TGY8VUX7ljwUDkcZ0pOdoGKAVwgaNwWRtUOK8ZiphE6Hkr/Nc3m+Y78+XSsK028SM2ClkIg/Mdgau3XoX1GCBl34CjR+C9qpuhujeU/hEIP6odSI93kk0x5MMWEjBjcnDPbOAQeL8Zcn4KzMhpOC+u65jz5mRdaLBGVMQsRNaBXMCsBnLBFsTfGcC6D4L3NiHPWCByND53rCl8OLtK9zsQelDzNuO5AbnAIB+6gJzfRAKHiye4m8BTB8C590HKUQjZz2Ps1AqbGiByY8TeDEXiIKSGwPuMKlmKbPYYiWwE5zWQwH5wnr3I+ZrVM8e7dsNxoqRRQ9+rpnn6pRpQxBTh+y+klEpxlpwlQeYs4h/v4FWrltJ8G6i0Tt+uQPBmOSZ7tyLQswW+a5vgvbIR7q71mOhci0/tq/H+zEqMnVyO123L4DheAiLD3qKxLvk7/wRGMAClf/I+KAAAAABJRU5ErkJggg==);
+			}
+			.error {
+				border-color: #DC4C42;
+				background-color: #FBB19B;
+				background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACZklEQVR42qWT+0tTYRjH+1s0TLsQEkH4g+aUYXYxdsxL22EXndtqeWFkUp65m+SKRBdiEqFmDoWgwAoqNZGQiDDKIupkpOtsbW7qPGfzzIJv5xzsjEj8xQe+v7y8n++X53nedxeAHem/g9/t5zI3PBYq5TLR6w4jm7DXsGyrno5f1lIrl8jMbQ0EkEi5zMFldz04vw/8owFJrL8bYcqMJVt1MNxUQWxpkHKbCd5Zx8V7Pfg1MQp+6BqS3vOS+LtebIyPIOprww+rilu0lBH/GPBOU0ayzcis9rolOOGqkfS3WLsebKsOqad+RG5cwbfaUoY2lGTIBkKf9qjTmoadBnAOg2wg9I/VFi1Wmknwj4cx30jiE1lklw2EC7TYJz/YIYJy4mZJ4LJNg2ijGvGbLkRvefG+Kp+WDWLN6iT/ZBCcxySCcuJmSeBS/VlErNUIN2gRH7mNWSIvKRuEmyqT62MDWHMYRVBO3Pg8J/IS+NNShZCpEiErifhwH16XHU4bMBdU9Gp/J7g+jwjKifE7XWAf+CUwaKwAYziDJS+FUHc7Zkpz0y0smE/Zv9t0WB+7J4Jy4mZJYEBfjkUtgbXRfrzTn8a08kB6iF9rjmV80SmZYEcLEg+H5MSYzyvsvkMCF0iVBM9TDZgq3sdMKnLkNUr6qFEQc9UFXMBzEdz9QUSvC4/GpEGgTo3IVUoYnAC3NuBFUQ43UbiH2PIpvy3PI96ojgQ/1KoQ6hLmMdCDWH8PmE43ZskTmCjMDj4vyCK2/UyvTh7KnDmeS70sOUhPK/ezU8V72UlFNj1+NIt6lr97y8+0I/0Bcq/UGoJ9DNcAAAAASUVORK5CYII=);
+			}
+
+			.button {
+				font-family: Arial, Helvetica, sans-serif;
+				color: #ffffff;
+				display: inline-block;
+				padding: 10px 20px;
+				background: -moz-linear-gradient(top, #ffcc00 0%, #ff8400);
+				background: -webkit-gradient(linear, left top, left bottom, from(#ffcc00), to(#ff8400));
+				-moz-border-radius: 5px;
+				-webkit-border-radius: 5px;
+				border-radius: 5px;
+				border: 0px solid #171717;
+				-moz-box-shadow: 0px 1px 3px rgba(0, 0, 0, 0), inset 0px 0px 10px rgba(87, 87, 87, 0);
+				-webkit-box-shadow: 0px 1px 3px rgba(0, 0, 0, 0), inset 0px 0px 10px rgba(87, 87, 87, 0);
+				box-shadow: 0px 1px 3px rgba(0, 0, 0, 0), inset 0px 0px 10px rgba(87, 87, 87, 0);
+				text-shadow: 0px -1px 0px rgba(0, 0, 0, 0), 0px 1px 0px rgba(255, 255, 255, 0.3);
+			}
 		</style>
 	</head>
 
@@ -1359,14 +1581,14 @@ if (PHP_SAPI === 'cli') {
 		<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHYAAAAiCAYAAACKuC3wAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAABzJJREFUeNrsWwlsFUUYHh4VkEMEKaACHmAV0KTENFxaiIqK1sQDNYISUTQRDSlH1DSIBqSgAQVijGIEjdYDREXEIEo4LSiKgFgUMKCAIK1KFQoUSv1++y/v7zCzZ1/bkP2TLztv59jd+Wb+a/c1qKysVLGcftLAb8PKfNUQh8sYRxrkqUWGNpNweBhoI06XAiXALuBnoBBYgv774umvA2JBEtVlATcA13K5KVf3ADEbtPadcdju87rHgY+BURhnd0xDzUuagdAMHIYDg4HzDX3+1kll6RjwuoOAnrje5Rjvn5iKFBGLCSYV+yxwu4eKtpFwIMT1aTHcCMyNqUgBsSB1NA75QGMffc6xnP891XY+Fv+SAKmP4DjNJ6kkzdGnwyns5Kn9OISxl3/FNKSAWODREP36Wc5/FWKsXTENqSG2W4h+11jOLwo4zkFga0xDamxsGBt3PYVDUL96duMToBxo5HOc7zHGCUtda2B8iHtbAXzEjmBzseC+8Og3AsgwtD8TmAq04nCvMZ+juSsD9gLLOHzz40CeAdxGcwhczOORQ7qZnch1Ln3p+rdQuAlcAqQL/2Y58BZw6H/TCIIogXBWiAnsC1IKDeHSh3zjfuQJjPG8pe5CYEeI+5oB5DIZY/jcFqA73Z6lTyfgFyarAqCY/FeuO5tCPJ++wgPAApc2GbwAurq0IXIeAo4a6jJpM7j03QYMoHtPhJw8kiEuE+tXFqZQG01j7aF4InNc2o4Wod/bglSTlPAEbgQ2iGuQhvkA6GXp14q1gCSVHM4iNkmO3AfM8vF8tNh+4gXpCO3i2Y6NLQo5cXdidzYyeMekCtf76L8Obbe41JOHfZEBss89hvoJXEcqco7UDi4qf7ijcIApHvedzjsvk1UiJXFWC9M23dLvKdYMzuIgP6Uda5J07f6GAlcZxvhNVWUC2/J90yLpwmq9Qvg/3YjYNSGJTefskUnyfPR/2aOe0o47DSgXbfYZ6mX4NFU8cF+GLhQVNOPyXN4FQaSEiXB8hZ7CVjtCdvRB8fsxtsuOHAHIJL2v3ZdJ3S8BirXzpAnmi9/ZROzKCOou15hxyFOf47DYpR+tvHdqwTmk3PU8l11LTtBI8XtKyOvsYLXsiK6Os4QfU8wq22uxXxfwHr4W5S5E7KYIWaMsqOM+Ll7mQUvdOJBfXkue/2RRztHCu2Eq+SZqoUZOUNmqOX5Semtee4VLHuAYl9uwmg2T6GmR4JAlihMzzrJrd7AjoIczi9lBqS3ZJOJrCu3GCns4VrTLj3gdObEttbpLRflHlzEqNFOQEeD6zUW5PMGFeREeaCB2bbaFXHLt71JV72QV3/RQQ/ybapGk3csOzx3sbJF8CayNeI2GoqyHKvItmZd23CPKHQJcXy6e3Q6xyyOoY1fbBBLJqF/ANuNK/C6ug0RMofAlKEEwSrO3k2rgGvLjgkNaXVvLzvba+e18XrsZL1RHViV48iu00CCo9MauHeJCbimwFCirwyzbZM3p68HlNbywo0qmxd6SNBHlfz3GKdOyVCZpz3a8M4c65KyeK+x0YUI0ft0lM+NHpoPc9qr+ymKRtZFqc0INjN2PJ9mRtYYdZVPTusjdbssIvsee+HYmta/wjO92EhTS2VkQURUVgNy0ekzuZO33Bp6YsELzR58NFYhzpPLr6o1Ve8cDT2gVL0QcmLIec/jDt/oo87XgfkYILXVAoJwdL8c5olBlTA3er+0FyUvsJxCeFjEs+TLvUkiXptnCVSBlhbK/b/Uj5HV2wjjjeeUexbh76gmxJzQbFuZznpaW8/Ss9BLgW0NdqZaF8nKEHLF9hqQnOCaqqjdrORzGjTCpzWe0dFcYyWaHhB6oqzq95E1RPqyqEvmFPGe2pIs838Jj/KaWfm5CWmemSr7o6J9m8GCXY7d9huJNNTAJuRhv72lG7P0h+vwhyq092sr6IN9e/yDKXRKWRhTjHY9qz0DqGyoWPSlxnkdbmcwIsimqqfuEJe6kt/kvRniQnSr5KiyW6mnC7i7tyOnMsPTzkiO6u24TsrXbQjwExWG3YnEciPk8Kd+I8tUu895LOFclKthHEDL9WJpwyRaVsYd7LKDXOQR9N8ZcVpPvhIdLacKBlnbDRHlpwGsMEOVtbjuWyKWVNjIAqZTgXxDzeIoc5vjSkekGW3uz5pjNNoxDb3CaGM53ZA17MkmS8LojEPUKDs95NDvGpBbEHFplooib6T0rpQPpw79XgVXApyqZ6qRs2BLDGIPY1FHflRzPEjar5H+nyOl9zVf6D4Q9iRCojFeF/rkqfZs0mJIbMXeuQkka+l8UvcqkHDB9vWH6mnM9m0Cb0GbsrKrnpqU8Tk5Xwu9dgThKllPKcDUHxOTC0+u6K2qZVPqP7UbGwRD9i0T/Uh/tK0T7qL7DMvaKSRVvVcmUIanqNWz2+rDjZLPVs7jtfpVMh/6pqjJP/Z1o5j8BBgADhL1q2hRfzwAAAABJRU5ErkJggg==" width="118" height="34" alt="TYPO3 Probe Tool" class="logo" />
 
 		<h1>TYPO3 Probe</h1>
-		<p class="well">Checks server for ability to run TYPO3 flawlessly.<br />
-		Please remove this file immediately after probing.</p>
+		<p class="well">Checks server for ability to run TYPO3 CMS version 6.2 flawlessly.</p>
 
-		<?= printStatus($statuses); ?>
+		<?= printStatus($sortedStatusObjects); ?>
 
 		<footer>
-			<p><a href="https://github.com/7elix/TYPO3-Probe" target="_blank">TYPO3 Probe</a>. Copyright © 2013 Felix Kopp; based on install check by Christian Kuhn. Extensions are copyright of their respective owners. Go to <a href="http://typo3.org/" target="_blank">http://typo3.org/</a> for details.<br />
-			TYPO3 CMS and TYPO3 Probe comes with ABSOLUTELY NO WARRANTY; <a href="http://typo3.org/license" target="_blank">click for details</a>. This is free software, and you are welcome to redistribute it under certain conditions; <a href="http://typo3.org/license" target="_blank">click for details</a>. Obstructing the appearance of this notice is prohibited by law.</p>
+			<p><a href="https://github.com/7elix/TYPO3-Probe" target="_blank">TYPO3 Probe</a>. Copyright © 2013 <a href="http://phorax.com/" target="_blank">Felix Kopp</a>; based on install check by Christian Kuhn. Extensions are copyright of their respective owners. Go to <a href="http://typo3.org/" target="_blank">http://typo3.org/</a> for details.</p>
+
+			<p>TYPO3 CMS and TYPO3 Probe comes with ABSOLUTELY NO WARRANTY; <a href="http://typo3.org/license" target="_blank">click for details</a>. This is free software, and you are welcome to redistribute it under certain conditions; <a href="http://typo3.org/license" target="_blank">click for details</a>. Obstructing the appearance of this notice is prohibited by law.</p>
 
 			<p><a href="http://typo3.org/" target="_blank">TYPO3.org</a> &#124; <a href="http://typo3.org/donate/" target="_blank">Donate</a></p>
 
