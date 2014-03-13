@@ -2,9 +2,6 @@
 	"name": "phorax/typo3-probe",
 	"type": "package",
 	"description": "Checks server for ability to run TYPO3 CMS flawlessly.",
-	"keywords": [
-		"TYPO3, probe"
-	],
 	"authors": [
 		{
 			"name": "Felix Kopp",
