@@ -21,14 +21,14 @@ Depending on your setup you can upload TYPO3-Probe with any file transfer or dow
 
 Recommended when you know and have composer. Please make sure, composer is installed on remote server (https://getcomposer.org/doc/00-intro.md). On command line of your remote server type:
 
-	composer create-project phorax/typo3-probe typo3-probe
+	composer create-project phorax/typo3-probe typo3-probe1
 
 This results in TYPO3-Probe script being installed into the directory typo3-probe on your server.
 
 ### Via file transfer
 
 a) Download ZIP archive locally
-	<a href="https://github.com/7elix/TYPO3-Probe/archive/master.zip">https://github.com/7elix/TYPO3-Probe/archive/master.zip</a>
+	<a href="https://github.com/7elix/TYPO3-Probe/releases">https://github.com/7elix/TYPO3-Probe/releases</a>.
 
 b) Extract .ZIP file locally ("typo3-probe")
 
