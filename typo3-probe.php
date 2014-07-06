@@ -315,8 +315,7 @@ class Check {
 	 */
 	protected function checkCurrentDirectoryIsInIncludePath() {
 		$includePath = ini_get('include_path');
-		$delimiter = $this->isWindowsOs() ? ';' : ':';
-		$pathArray = $this->trimExplode($delimiter, $includePath);
+		$pathArray = $this->trimExplode(PATH_SEPARATOR, $includePath);
 		if (!in_array('.', $pathArray)) {
 			$status = new WarningStatus();
 			$status->setTitle('Current directory (./) is not within PHP include path');
